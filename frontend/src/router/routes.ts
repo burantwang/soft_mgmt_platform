@@ -42,12 +42,6 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '版本发布管理', icon: 'Promotion', perm: 'sonic:view' }
       },
       {
-        path: 'history',
-        name: 'ReleaseHistory',
-        component: () => import('@/pages/history/index.vue'),
-        meta: { title: '发布历史', icon: 'Clock', perm: 'sonic:view' }
-      },
-      {
         path: 'task',
         name: 'FailTask',
         component: () => import('@/pages/task/index.vue'),

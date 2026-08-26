@@ -96,8 +96,107 @@ class HtmlReportParserTest {
         assertEquals(2, result.getFailCases().size());
 
         HtmlReportParser.FailCase first = result.getFailCases().get(0);
+        assertEquals("failed", first.getStatus());
         assertEquals("test_login_failed[user1]", first.getName());
         assertTrue(first.getLog().contains("AssertionError: login failed"));
+
+        HtmlReportParser.FailCase second = result.getFailCases().get(1);
+        assertEquals("error", second.getStatus());
+        assertEquals("test_connect_timeout", second.getName());
+        assertTrue(second.getLog().contains("TimeoutError: connect timeout"));
+    }
+
+    /**
+     * 真实 pytest-html v3.x 报告结构：每个用例一个
+     * <code>&lt;tbody class="failed results-table-row"&gt;</code>，日志位于内部
+     * <code>td.extra div.log</code>（状态在 tbody class 上，而非 tr class）。
+     */
+    @Test
+    void parse_realPytestHtmlV3Structure() {
+        String html = """
+                <!DOCTYPE html>
+                <html>
+                <head><title>pytest-html report</title></head>
+                <body>
+                <div class="summary">
+                  <p class="totals"><span class="passed">1 passed</span>, <span class="failed">2 failed</span>, <span class="error">1 error</span>, <span class="xfailed">1 xfailed</span>, <span class="skipped">1 skipped</span> in 60.0s</p>
+                </div>
+                <table id="results-table">
+                  <tbody class="passed results-table-row">
+                    <tr><td class="col-result">Passed</td><td class="col-name">test_ok</td><td class="col-duration">0.1</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"></td></tr>
+                  </tbody>
+                  <tbody class="failed results-table-row">
+                    <tr><td class="col-result">Failed</td><td class="col-name">function/alarm/test_alarm.py::test_alarm_case1</td><td class="col-duration">2.5</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"><div class="log"><span class="warning">W</span> warning line<br/><span class="failed">F</span> AssertionError: alarm not triggered<br/>expected 'on', got 'off'</div></td></tr>
+                  </tbody>
+                  <tbody class="error results-table-row">
+                    <tr><td class="col-result">Error</td><td class="col-name">function/alarm/test_alarm.py::test_alarm_setup::teardown</td><td class="col-duration">0.5</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"><div class="log"><span class="error">E</span> TimeoutError: connect to 10.0.0.1:8080 timed out</div></td></tr>
+                  </tbody>
+                  <tbody class="failed results-table-row">
+                    <tr><td class="col-result">Failed</td><td class="col-name">function/portal/test_portal.py::test_portal_login</td><td class="col-duration">3.0</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"><div class="log"><span class="failed">F</span> AssertionError: login failed</div></td></tr>
+                  </tbody>
+                  <tbody class="xfailed results-table-row">
+                    <tr><td class="col-result">XFailed</td><td class="col-name">test_xfail_case</td><td class="col-duration">0.1</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"></td></tr>
+                  </tbody>
+                  <tbody class="skipped results-table-row">
+                    <tr><td class="col-result">Skipped</td><td class="col-name">test_skip_case</td><td class="col-duration">0.0</td><td class="col-links"></td></tr>
+                    <tr><td class="extra" colspan="4"></td></tr>
+                  </tbody>
+                </table>
+                </body>
+                </html>
+                """;
+        HtmlReportParser.ParseResult result = HtmlReportParser.parse(html.getBytes(StandardCharsets.UTF_8));
+
+        // totalCount = passed + failed + error + skipped（xfailed 不计入，且不得覆盖 failed 计数）
+        assertEquals(5, result.getTotalCount());
+        assertEquals(2, result.getFailedCount());
+        assertEquals(1, result.getErrorCount());
+        // 仅 failed + error 用例被提取，xfailed/skipped/passed 不误入
+        assertEquals(3, result.getFailCases().size());
+
+        HtmlReportParser.FailCase first = result.getFailCases().get(0);
+        assertEquals("failed", first.getStatus());
+        assertEquals("function/alarm/test_alarm.py::test_alarm_case1", first.getName());
+        assertTrue(first.getLog().contains("AssertionError: alarm not triggered"));
+
+        HtmlReportParser.FailCase second = result.getFailCases().get(1);
+        assertEquals("error", second.getStatus());
+        assertEquals("function/alarm/test_alarm.py::test_alarm_setup::teardown", second.getName());
+        assertTrue(second.getLog().contains("TimeoutError: connect to 10.0.0.1:8080"));
+
+        HtmlReportParser.FailCase third = result.getFailCases().get(2);
+        assertEquals("failed", third.getStatus());
+        assertEquals("function/portal/test_portal.py::test_portal_login", third.getName());
+    }
+
+    /** 大量失败用例应全部提取，不做数量截断 */
+    @Test
+    void parse_manyFailCases_noTruncation() {
+        StringBuilder sb = new StringBuilder("""
+                <!DOCTYPE html>
+                <html><body>
+                <div class="summary"><p class="totals"><span class="failed">120 failed</span> in 60.0s</p></div>
+                <table id="results-table">
+                """);
+        for (int i = 0; i < 120; i++) {
+            sb.append("<tbody class=\"failed results-table-row\">")
+                    .append("<tr><td class=\"col-result\">Failed</td><td class=\"col-name\">test_case_").append(i).append("</td><td class=\"col-duration\">0.1</td><td class=\"col-links\"></td></tr>")
+                    .append("<tr><td class=\"extra\" colspan=\"4\"><div class=\"log\">F log_").append(i).append("</div></td></tr>")
+                    .append("</tbody>\n");
+        }
+        sb.append("</table></body></html>");
+
+        HtmlReportParser.ParseResult result = HtmlReportParser.parse(sb.toString().getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(120, result.getFailedCount());
+        assertEquals(120, result.getFailCases().size(), "超过 100 条失败用例也应全部提取");
+        assertEquals("test_case_119", result.getFailCases().get(119).getName());
+        assertTrue(result.getFailCases().get(119).getLog().contains("log_119"));
     }
 
     /** 缺字段报告：缺少 Environment.Version 与报告时间，仍可解析，字段为空 */

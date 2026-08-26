@@ -1,0 +1,38 @@
+package com.company.devplatform.module.release.dto;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+/**
+ * 失败用例处理/更新请求
+ */
+@Data
+public class FailCaseUpdateDTO {
+
+    /** 目标状态：1待处理 2处理中 3已完成 4已关闭 */
+    @NotNull(message = "处理状态不能为空")
+    private Integer status;
+
+    /** 责任人ID */
+    private Long assigneeId;
+
+    /** 失败原因 */
+    @Size(max = 1000, message = "失败原因不能超过1000字")
+    private String failReason;
+
+    /** 修改方案 */
+    @Size(max = 1000, message = "修改方案不能超过1000字")
+    private String fixPlan;
+
+    /** 是否提Bug:0否 1是 */
+    private Integer isBug;
+
+    /** 分析进展 */
+    @Size(max = 255, message = "分析进展不能超过255字")
+    private String progress;
+
+    /** 结论 */
+    @Size(max = 1000, message = "结论不能超过1000字")
+    private String conclusion;
+}

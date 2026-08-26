@@ -30,8 +30,10 @@ import com.company.devplatform.module.release.service.ReleaseFailTaskService;
 import com.company.devplatform.module.release.service.ReleaseRecordService;
 import com.company.devplatform.module.release.service.ReportPreviewStore;
 import com.company.devplatform.module.release.util.HtmlReportParser;
+import com.company.devplatform.module.release.vo.ReleaseRecordExcelVO;
 import com.company.devplatform.module.release.vo.ReleaseRecordVO;
 import com.company.devplatform.module.release.vo.ReportPreviewVO;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,8 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,7 +74,36 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
     private final ReleaseFailTaskService failTaskService;
 
     @Override
-    public IPage<ReleaseRecordVO> page(int page, int size, String branch, Integer result, Integer source) {
+    public IPage<ReleaseRecordVO> page(int page, int size, String branch, Integer result, Integer source,
+                                       Long projectId, LocalDateTime startTime, LocalDateTime endTime) {
+        LambdaQueryWrapper<ReleaseRecord> wrapper = buildQueryWrapper(branch, result, source, projectId,
+                startTime, endTime);
+        IPage<ReleaseRecord> recordPage = recordMapper.selectPage(new Page<>(page, size), wrapper);
+        return recordPage.convert(this::toVO);
+    }
+
+    @Override
+    public List<String> listBranches() {
+        List<ReleaseRecord> records = recordMapper.selectList(
+                new LambdaQueryWrapper<ReleaseRecord>()
+                        .select(ReleaseRecord::getBranch)
+                        .isNotNull(ReleaseRecord::getBranch)
+                        .ne(ReleaseRecord::getBranch, ""));
+        return records.stream().map(ReleaseRecord::getBranch).distinct().collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ReleaseRecordExcelVO> exportRecords(String branch, Integer result, Integer source,
+                                                    Long projectId, LocalDateTime startTime, LocalDateTime endTime) {
+        List<ReleaseRecord> records = recordMapper.selectList(
+                buildQueryWrapper(branch, result, source, projectId, startTime, endTime));
+        return records.stream().map(this::toExcelVO).collect(Collectors.toList());
+    }
+
+    /** 组装查询条件：按机型筛选需关联 release_record_project */
+    private LambdaQueryWrapper<ReleaseRecord> buildQueryWrapper(String branch, Integer result, Integer source,
+                                                                Long projectId, LocalDateTime startTime,
+                                                                LocalDateTime endTime) {
         LambdaQueryWrapper<ReleaseRecord> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(branch)) {
             wrapper.like(ReleaseRecord::getBranch, branch);
@@ -80,10 +114,23 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         if (source != null) {
             wrapper.eq(ReleaseRecord::getSource, source);
         }
+        if (startTime != null) {
+            wrapper.ge(ReleaseRecord::getPublishTime, startTime);
+        }
+        if (endTime != null) {
+            wrapper.le(ReleaseRecord::getPublishTime, endTime);
+        }
+        if (projectId != null) {
+            List<Long> recordIds = recordProjectMapper.selectList(
+                            new LambdaQueryWrapper<ReleaseRecordProject>()
+                                    .eq(ReleaseRecordProject::getProjectId, projectId)
+                                    .select(ReleaseRecordProject::getRecordId))
+                    .stream().map(ReleaseRecordProject::getRecordId).collect(Collectors.toList());
+            wrapper.in(ReleaseRecord::getId,
+                    recordIds.isEmpty() ? Collections.singletonList(-1L) : recordIds);
+        }
         wrapper.orderByDesc(ReleaseRecord::getPublishTime);
-
-        IPage<ReleaseRecord> recordPage = recordMapper.selectPage(new Page<>(page, size), wrapper);
-        return recordPage.convert(this::toVO);
+        return wrapper;
     }
 
     @Override
@@ -102,6 +149,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         ReleaseRecord record = new ReleaseRecord();
         record.setBranch(dto.getBranch().trim());
         record.setVersion(dto.getVersion() == null ? null : dto.getVersion().trim());
+        record.setImageUrl(dto.getImageUrl() == null ? null : dto.getImageUrl().trim());
         record.setResult(dto.getResult());
         record.setTotalCount(0);
         record.setPassedCount(0);
@@ -199,6 +247,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         if (parsed.getFailCases() != null) {
             for (HtmlReportParser.FailCase fc : parsed.getFailCases()) {
                 ReportPreviewVO.FailCase c = new ReportPreviewVO.FailCase();
+                c.setStatus(fc.getStatus());
                 c.setName(fc.getName());
                 c.setLog(fc.getLog());
                 failCases.add(c);
@@ -228,6 +277,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         ReleaseRecord record = new ReleaseRecord();
         record.setBranch(dto.getBranch().trim());
         record.setVersion(version);
+        record.setImageUrl(dto.getImageUrl() == null ? null : dto.getImageUrl().trim());
         record.setResult(preview.getResult());
         record.setReportFileId(resource.getId());
         record.setTotalCount(preview.getTotalCount());
@@ -250,6 +300,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
             List<HtmlReportParser.FailCase> failCases = preview.getFailCases().stream()
                     .map(fc -> {
                         HtmlReportParser.FailCase c = new HtmlReportParser.FailCase();
+                        c.setStatus(fc.getStatus());
                         c.setName(fc.getName());
                         c.setLog(fc.getLog());
                         return c;
@@ -263,7 +314,8 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long createFromJenkinsWithReport(String branch, String version, List<String> projectCodes,
+    public Long createFromJenkinsWithReport(String branch, String version, String imageUrl,
+                                            List<String> projectCodes,
                                             String remark, FileStorageService.StoredFile storedFile) {
         List<Long> projectIds = validateProjectCodes(projectCodes);
         byte[] content = null;
@@ -280,7 +332,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         Long reportFileId = storedFile == null ? null
                 : fileStorageService.register(storedFile, null, FileType.REPORT).getId();
 
-        return createRecord(ReleaseSource.JENKINS_PUSH.getCode(), branch, version, projectIds, remark,
+        return createRecord(ReleaseSource.JENKINS_PUSH.getCode(), branch, version, imageUrl, projectIds, remark,
                 parsed.getFailedCount() > 0 || parsed.getErrorCount() > 0
                         ? ReleaseResult.FAILED.getCode() : ReleaseResult.SUCCESS.getCode(),
                 parsed.getTotalCount(), parsed.getPassedCount(), parsed.getFailedCount(),
@@ -295,7 +347,8 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         int failed = nvl(dto.getFailedCount());
         int error = nvl(dto.getErrorCount());
         int result = (failed > 0 || error > 0) ? ReleaseResult.FAILED.getCode() : ReleaseResult.SUCCESS.getCode();
-        return createRecord(ReleaseSource.JENKINS_PUSH.getCode(), dto.getBranch(), dto.getVersion(), projectIds,
+        return createRecord(ReleaseSource.JENKINS_PUSH.getCode(), dto.getBranch(), dto.getVersion(),
+                dto.getImageUrl(), projectIds,
                 dto.getRemark(), result, nvl(dto.getTotalCount()), nvl(dto.getPassedCount()), failed,
                 error, nvl(dto.getSkippedCount()), dto.getDurationSec(), dto.getReportTime(),
                 null, null, Collections.emptyList());
@@ -306,14 +359,15 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long createRecord(Integer source, String branch, String version, List<Long> projectIds, String remark,
-                             Integer result, Integer totalCount, Integer passedCount, Integer failedCount,
+    public Long createRecord(Integer source, String branch, String version, String imageUrl, List<Long> projectIds,
+                             String remark, Integer result, Integer totalCount, Integer passedCount, Integer failedCount,
                              Integer errorCount, Integer skippedCount, BigDecimal durationSec,
                              LocalDateTime reportTime, Long reportFileId, Long publisherId,
                              List<ReportPreviewVO.FailCase> failCases) {
         ReleaseRecord record = new ReleaseRecord();
         record.setBranch(branch.trim());
         record.setVersion(version == null ? null : version.trim());
+        record.setImageUrl(imageUrl == null ? null : imageUrl.trim());
         record.setResult(result);
         record.setReportFileId(reportFileId);
         record.setTotalCount(totalCount == null ? 0 : totalCount);
@@ -333,6 +387,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         if (ReleaseResult.FAILED.getCode() == result && failCases != null && !failCases.isEmpty()) {
             List<HtmlReportParser.FailCase> cases = failCases.stream().map(fc -> {
                 HtmlReportParser.FailCase c = new HtmlReportParser.FailCase();
+                c.setStatus(fc.getStatus());
                 c.setName(fc.getName());
                 c.setLog(fc.getLog());
                 return c;
@@ -342,13 +397,78 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         return record.getId();
     }
 
+    @Override
+    public void outputReportContent(Long fileId, HttpServletResponse response) {
+        if (fileId == null) {
+            throw new BusinessException(ErrorCode.FILE_READ_ERROR, "报告文件不存在");
+        }
+        FileResource file = fileResourceMapper.selectById(fileId);
+        if (file == null) {
+            throw new BusinessException(ErrorCode.FILE_READ_ERROR, "报告文件不存在");
+        }
+        Path absolute = fileStorageService.resolveAbsolutePath(file.getStoredPath());
+        if (!Files.exists(absolute)) {
+            throw new BusinessException(ErrorCode.FILE_READ_ERROR, "报告文件不存在或已被清理");
+        }
+        try {
+            String mime = StringUtils.hasText(file.getMimeType()) ? file.getMimeType() : "text/html";
+            String ext = StringUtils.hasText(file.getFileExt()) ? file.getFileExt() : "html";
+            response.setContentType(mime + "; charset=UTF-8");
+            response.setHeader("Content-Disposition",
+                    "inline; filename=\"report_" + fileId + "." + ext + "\"");
+            Files.copy(absolute, response.getOutputStream());
+            response.flushBuffer();
+        } catch (IOException e) {
+            log.error("[报告] 输出原始报告失败 fileId={}", fileId, e);
+            throw new BusinessException(ErrorCode.FILE_READ_ERROR, "报告文件读取失败");
+        }
+    }
+
     /* ==================== 私有辅助 ==================== */
+
+    private ReleaseRecordExcelVO toExcelVO(ReleaseRecord record) {
+        ReleaseRecordExcelVO vo = new ReleaseRecordExcelVO();
+        vo.setBranch(record.getBranch());
+        vo.setVersion(record.getVersion());
+        ReleaseResult rr = ReleaseResult.of(record.getResult());
+        vo.setResultDesc(rr == null ? "-" : rr.getDesc());
+        vo.setTotalCount(record.getTotalCount());
+        vo.setPassedCount(record.getPassedCount());
+        vo.setFailedCount(record.getFailedCount());
+        vo.setErrorCount(record.getErrorCount());
+        vo.setSkippedCount(record.getSkippedCount());
+        vo.setPassRate(calcPassRate(record));
+        vo.setDurationSec(record.getDurationSec());
+        vo.setReportTime(record.getReportTime());
+        vo.setPublishTime(record.getPublishTime());
+        ReleaseSource rs = ReleaseSource.of(record.getSource());
+        vo.setSourceDesc(rs == null ? "-" : rs.getDesc());
+        vo.setRemark(record.getRemark());
+
+        List<ReleaseRecordProject> links = recordProjectMapper.selectList(
+                new LambdaQueryWrapper<ReleaseRecordProject>()
+                        .eq(ReleaseRecordProject::getRecordId, record.getId()));
+        if (!links.isEmpty()) {
+            List<Long> projectIds = links.stream().map(ReleaseRecordProject::getProjectId).collect(Collectors.toList());
+            List<ReleaseProject> projects = projectMapper.selectBatchIds(projectIds);
+            vo.setProjectNames(projects.stream().map(ReleaseProject::getProjectName)
+                    .collect(Collectors.joining("、")));
+        }
+        if (record.getPublisherId() != null) {
+            SysUser user = sysUserMapper.selectById(record.getPublisherId());
+            if (user != null) {
+                vo.setPublisherName(user.getNickname());
+            }
+        }
+        return vo;
+    }
 
     private ReleaseRecordVO toVO(ReleaseRecord record) {
         ReleaseRecordVO vo = new ReleaseRecordVO();
         vo.setId(record.getId());
         vo.setBranch(record.getBranch());
         vo.setVersion(record.getVersion());
+        vo.setImageUrl(record.getImageUrl());
         vo.setResult(record.getResult());
         ReleaseResult rr = ReleaseResult.of(record.getResult());
         vo.setResultDesc(rr == null ? "-" : rr.getDesc());
@@ -455,6 +575,7 @@ public class ReleaseRecordServiceImpl implements ReleaseRecordService {
         }
         return source.stream().map(fc -> {
             ReportPreviewVO.FailCase c = new ReportPreviewVO.FailCase();
+            c.setStatus(fc.getStatus());
             c.setName(fc.getName());
             c.setLog(fc.getLog());
             return c;

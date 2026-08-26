@@ -65,8 +65,8 @@ export default async function request<T = unknown>(config: AxiosRequestConfig): 
 
 /** 便捷方法 */
 export const http = {
-  get: <T = unknown>(url: string, params?: Record<string, unknown>) =>
-    request<T>({ method: 'get', url, params }),
+  get: <T = unknown>(url: string, params?: Record<string, unknown>, config?: AxiosRequestConfig) =>
+    request<T>({ method: 'get', url, params, ...config }),
   post: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     request<T>({ method: 'post', url, data, ...config }),
   put: <T = unknown>(url: string, data?: unknown) =>

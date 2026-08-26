@@ -20,6 +20,9 @@ public class ReleaseRecordVO {
     /** 镜像版本号 */
     private String version;
 
+    /** 镜像地址 */
+    private String imageUrl;
+
     /** 发布结果:1成功 2失败 */
     private Integer result;
 

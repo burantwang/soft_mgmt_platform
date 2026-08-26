@@ -63,8 +63,14 @@ Log "my.ini written: $myIni"
 # 3) initialize data dir (root empty password, insecure)
 if (-not (Test-Path (Join-Path $dataDir 'mysql'))) {
     Log 'Initializing MySQL data directory...'
-    & (Join-Path $mysqlDir 'bin\mysqld.exe') --defaults-file=$myIni --initialize-insecure --console *>> $logFile
-    if ($LASTEXITCODE -ne 0) { throw 'MySQL initialize failed' }
+    # NOTE: do NOT use --console nor *>> here: mysqld writes progress to stderr,
+    # and with $ErrorActionPreference='Stop' PS 5.1 throws NativeCommandError,
+    # aborting init midway (data dir left with only auto.cnf).
+    $ErrorActionPreference = 'Continue'
+    & (Join-Path $mysqlDir 'bin\mysqld.exe') --defaults-file=$myIni --initialize-insecure
+    $initCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($initCode -ne 0) { throw "MySQL initialize failed (exit=$initCode), see $dataDir\*.err" }
     Log 'Data directory initialized (root with empty password)'
 } else {
     Log 'Data directory already initialized'

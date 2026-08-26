@@ -25,6 +25,10 @@ public class JenkinsPushDTO {
     @Size(max = 128, message = "版本号最长128字符")
     private String version;
 
+    /** 镜像地址 */
+    @Size(max = 500, message = "镜像地址最长500字符")
+    private String imageUrl;
+
     /** 关联机型编码列表 */
     @NotEmpty(message = "请至少推送一个机型编码")
     private List<String> projectCodes;

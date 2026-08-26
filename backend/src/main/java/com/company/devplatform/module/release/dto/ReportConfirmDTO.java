@@ -26,6 +26,10 @@ public class ReportConfirmDTO {
     @Size(max = 128, message = "版本号最长128字符")
     private String version;
 
+    /** 镜像地址 */
+    @Size(max = 500, message = "镜像地址最长500字符")
+    private String imageUrl;
+
     /** 关联机型ID列表（至少一个） */
     @NotEmpty(message = "请至少选择一个机型")
     private List<Long> projectIds;

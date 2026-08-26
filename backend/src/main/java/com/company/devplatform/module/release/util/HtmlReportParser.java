@@ -6,6 +6,8 @@ import lombok.Data;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
 import org.jsoup.select.Elements;
 
 import java.math.BigDecimal;
@@ -13,7 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,11 +28,6 @@ import java.util.regex.Pattern;
  * <p>提取内容：用例统计、总耗时、Environment.Version、报告生成时间、失败/错误用例明细。</p>
  */
 public final class HtmlReportParser {
-
-    /** 单个失败用例日志最多保留字符数 */
-    private static final int MAX_LOG_LENGTH = 4000;
-    /** 最多提取失败用例数（超出部分截断，防超大报告拖垮内存） */
-    private static final int MAX_FAIL_CASE = 100;
 
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d+");
     private static final Pattern DURATION_PATTERN = Pattern.compile("in\\s+(\\d+(?:\\.\\d+)?)s", Pattern.CASE_INSENSITIVE);
@@ -58,6 +58,8 @@ public final class HtmlReportParser {
     /** 失败用例明细 */
     @Data
     public static class FailCase {
+        /** 用例状态：failed / error */
+        private String status;
         private String name;
         private String log;
     }
@@ -101,19 +103,29 @@ public final class HtmlReportParser {
         int skipped = 0;
 
         // 优先取 totals 中的 span（v3/v4 通用）
+        // 注意按 class token 精确匹配，避免 xfailed/xpassed 被误判为 failed
         Elements spans = doc.select(".totals span, p.totals span, span.totals span");
         for (Element span : spans) {
             String cls = span.className() == null ? "" : span.className();
             String text = span.text();
             int num = extractNumber(text);
-            if (cls.contains("passed")) {
-                passed = num;
-            } else if (cls.contains("failed")) {
-                failed = num;
-            } else if (cls.contains("error")) {
-                error = num;
-            } else if (cls.contains("skipped")) {
-                skipped = num;
+            for (String token : cls.toLowerCase().split("\\s+")) {
+                switch (token) {
+                    case "passed":
+                        passed = num;
+                        break;
+                    case "failed":
+                        failed = num;
+                        break;
+                    case "error":
+                        error = num;
+                        break;
+                    case "skipped":
+                        skipped = num;
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
@@ -191,30 +203,71 @@ public final class HtmlReportParser {
         }
     }
 
-    /** 提取失败/错误用例 */
+    /**
+     * 提取失败/错误用例（全部记录，不做数量截断）。
+     * 兼容两种报告结构：
+     * <ol>
+     *   <li>pytest-html v3.x+：每个用例一个 <code>&lt;tbody class="error results-table-row"&gt;</code>，
+     *       状态在 tbody class 上，日志位于内部的 <code>td.extra div.log</code></li>
+     *   <li>旧版/自定义样例：<code>&lt;tr class="failed"&gt;</code> / <code>&lt;tr class="error"&gt;</code>，
+     *       日志位于本行 <code>td.col-log pre</code></li>
+     * </ol>
+     */
     private static void parseFailCases(Document doc, ParseResult result) {
-        Elements rows = doc.select("tr.failed, tr.error");
-        int count = 0;
+        Elements rows = doc.select("#results-table tbody.results-table-row, #results-table tr.failed, #results-table tr.error");
         for (Element row : rows) {
-            if (count >= MAX_FAIL_CASE) {
-                break;
+            String status = extractFailStatus(row);
+            if (status == null) {
+                continue;
             }
-            HtmlReportParser.FailCase fc = new HtmlReportParser.FailCase();
-            Element nameEl = row.selectFirst(".col-name");
+            FailCase fc = new FailCase();
+            fc.setStatus(status);
+            Element nameEl = row.selectFirst("td.col-name, .col-name");
             if (nameEl != null) {
                 fc.setName(nameEl.text().trim());
             }
-            Element logEl = row.selectFirst(".col-log");
-            if (logEl != null) {
-                Element pre = logEl.selectFirst("pre");
-                String log = pre != null ? pre.text() : logEl.text();
-                fc.setLog(truncate(log, MAX_LOG_LENGTH));
+            if (fc.getName() == null || fc.getName().isEmpty()) {
+                continue;
             }
-            if (fc.getName() != null && !fc.getName().isEmpty()) {
-                result.getFailCases().add(fc);
-                count++;
+            Element logEl = row.selectFirst("td.extra .log, .col-log pre, .col-log, div.log");
+            if (logEl != null) {
+                String log = extractLogText(logEl);
+                if (!log.isEmpty()) {
+                    fc.setLog(log);
+                }
+            }
+            result.getFailCases().add(fc);
+        }
+    }
+
+    /**
+     * 判定用例行状态：优先按 class token 精确匹配 failed/error，
+     * 兜底按 <code>td.col-result</code> 单元格文本（Failed/Error）判定。
+     * 非失败/错误返回 null。
+     */
+    private static String extractFailStatus(Element row) {
+        String cls = row.className();
+        if (cls != null) {
+            for (String token : cls.toLowerCase().split("\\s+")) {
+                if ("failed".equals(token)) {
+                    return "failed";
+                }
+                if ("error".equals(token)) {
+                    return "error";
+                }
             }
         }
+        Element resultEl = row.selectFirst("td.col-result");
+        if (resultEl != null) {
+            String t = resultEl.text().trim().toLowerCase();
+            if ("failed".equals(t)) {
+                return "failed";
+            }
+            if ("error".equals(t)) {
+                return "error";
+            }
+        }
+        return null;
     }
 
     /** 从 span 文本提取数字 */
@@ -239,10 +292,47 @@ public final class HtmlReportParser {
         }
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null || s.length() <= max) {
-            return s;
+    /** 提取元素文本并保留原始换行与空白（不再做任何删减） */
+    private static String extractLogText(Element el) {
+        if (el == null) {
+            return "";
         }
-        return s.substring(0, max);
+        StringBuilder sb = new StringBuilder();
+        collectText(el, sb);
+        String text = sb.toString()
+                .replaceAll("[ \t]+\n", "\n")
+                .replaceAll("\n{3,}", "\n\n");
+        return text.trim();
     }
+
+    /** 递归收集文本节点；&lt;br&gt; 转换行，块级标签后补换行 */
+    private static void collectText(Node node, StringBuilder sb) {
+        if (node instanceof TextNode) {
+            sb.append(((TextNode) node).getWholeText());
+            return;
+        }
+        if (!(node instanceof Element)) {
+            return;
+        }
+        Element e = (Element) node;
+        String tag = e.normalName();
+        if ("br".equals(tag)) {
+            sb.append('\n');
+            return;
+        }
+        if ("script".equals(tag) || "style".equals(tag)) {
+            return;
+        }
+        for (Node child : e.childNodes()) {
+            collectText(child, sb);
+        }
+        if (BLOCK_TAGS.contains(tag)) {
+            sb.append('\n');
+        }
+    }
+
+    /** 块级标签（结束后追加换行） */
+    private static final Set<String> BLOCK_TAGS = new HashSet<>(Arrays.asList(
+            "p", "div", "pre", "li", "ul", "ol", "tr", "td", "th", "table",
+            "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "section", "article", "br"));
 }

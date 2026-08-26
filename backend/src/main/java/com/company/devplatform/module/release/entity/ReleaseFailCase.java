@@ -22,6 +22,9 @@ public class ReleaseFailCase {
     /** 聚合任务ID */
     private Long taskId;
 
+    /** 用例类型:failed失败 error错误 */
+    private String caseType;
+
     /** 用例全名 */
     private String caseName;
 
@@ -33,6 +36,15 @@ public class ReleaseFailCase {
 
     /** 修改方案(责任人填写) */
     private String fixPlan;
+
+    /** 是否提Bug:0否 1是 */
+    private Integer isBug;
+
+    /** 分析进展 */
+    private String progress;
+
+    /** 结论 */
+    private String conclusion;
 
     /** 状态:1待处理 2处理中 3已完成 4已关闭 */
     private Integer status;

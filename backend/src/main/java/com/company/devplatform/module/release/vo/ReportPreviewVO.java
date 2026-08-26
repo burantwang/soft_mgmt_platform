@@ -51,6 +51,8 @@ public class ReportPreviewVO {
     /** 失败用例明细 */
     @Data
     public static class FailCase {
+        /** 用例状态：failed / error */
+        private String status;
         private String name;
         private String log;
     }

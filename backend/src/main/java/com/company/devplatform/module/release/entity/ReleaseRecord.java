@@ -26,6 +26,9 @@ public class ReleaseRecord {
     /** 镜像版本号(Environment.Version) */
     private String version;
 
+    /** 镜像地址（如 registry.xxx.com/release/demo:v1.0.0） */
+    private String imageUrl;
+
     /** 发布结果:1成功 2失败 */
     private Integer result;
 

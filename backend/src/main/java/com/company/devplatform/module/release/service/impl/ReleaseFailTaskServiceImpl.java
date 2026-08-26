@@ -1,26 +1,67 @@
 package com.company.devplatform.module.release.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.company.devplatform.common.ErrorCode;
+import com.company.devplatform.common.exception.BusinessException;
+import com.company.devplatform.module.auth.entity.SysUser;
+import com.company.devplatform.module.auth.mapper.SysUserMapper;
+import com.company.devplatform.module.release.dto.FailCaseGroupedQuery;
+import com.company.devplatform.module.release.dto.FailCaseHandleDTO;
+import com.company.devplatform.module.release.dto.FailCaseUpdateDTO;
+import com.company.devplatform.module.release.dto.FailTaskAssignDTO;
+import com.company.devplatform.module.release.dto.FailTaskCreateDTO;
+import com.company.devplatform.module.release.dto.FailTaskStatusDTO;
+import com.company.devplatform.module.release.dto.FailTaskUpdateDTO;
 import com.company.devplatform.module.release.entity.ReleaseFailCase;
 import com.company.devplatform.module.release.entity.ReleaseFailTask;
+import com.company.devplatform.module.release.entity.FileResource;
+import com.company.devplatform.module.release.entity.ReleaseProject;
 import com.company.devplatform.module.release.entity.ReleaseRecord;
+import com.company.devplatform.module.release.entity.ReleaseRecordProject;
+import com.company.devplatform.module.release.enums.FailCaseStatus;
+import com.company.devplatform.module.release.mapper.FileResourceMapper;
 import com.company.devplatform.module.release.enums.FailTaskStatus;
+import com.company.devplatform.module.release.enums.ReleaseResult;
 import com.company.devplatform.module.release.mapper.ReleaseFailCaseMapper;
 import com.company.devplatform.module.release.mapper.ReleaseFailTaskMapper;
+import com.company.devplatform.module.release.mapper.ReleaseProjectMapper;
+import com.company.devplatform.module.release.mapper.ReleaseRecordMapper;
+import com.company.devplatform.module.release.mapper.ReleaseRecordProjectMapper;
 import com.company.devplatform.module.release.service.ReleaseFailTaskService;
 import com.company.devplatform.module.release.util.HtmlReportParser;
+import com.company.devplatform.module.release.vo.FailCaseGroupedVO;
+import com.company.devplatform.module.release.vo.FailCaseVO;
+import com.company.devplatform.module.release.vo.FailTaskDetailVO;
+import com.company.devplatform.module.release.vo.FailTaskVO;
+import com.company.devplatform.module.release.vo.GroupedFailCaseVO;
+import com.company.devplatform.module.release.vo.ReportFileItemVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * 失败聚合任务服务实现（阶段2：自动生成；完整流转见阶段4）
+ * 失败聚合任务服务实现（阶段2自动创建 + 阶段4查询/CRUD/指派/流转/联动）
  */
 @Slf4j
 @Service
@@ -29,6 +70,13 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
 
     private final ReleaseFailTaskMapper taskMapper;
     private final ReleaseFailCaseMapper caseMapper;
+    private final ReleaseRecordMapper recordMapper;
+    private final ReleaseRecordProjectMapper recordProjectMapper;
+    private final ReleaseProjectMapper projectMapper;
+    private final SysUserMapper userMapper;
+    private final FileResourceMapper fileResourceMapper;
+
+    /* ==================== 阶段2：自动创建 ==================== */
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -47,9 +95,10 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
             for (HtmlReportParser.FailCase fc : failCases) {
                 ReleaseFailCase c = new ReleaseFailCase();
                 c.setTaskId(task.getId());
+                c.setCaseType("error".equals(fc.getStatus()) ? "error" : "failed");
                 c.setCaseName(fc.getName());
                 c.setCaseLog(fc.getLog());
-                c.setStatus(FailTaskStatus.PENDING.getCode());
+                c.setStatus(FailCaseStatus.PENDING.getCode());
                 caseMapper.insert(c);
             }
         }
@@ -91,10 +140,639 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
                 .orderByAsc(ReleaseFailCase::getId));
     }
 
+    /* ==================== 阶段4：查询 ==================== */
+
+    @Override
+    public IPage<FailTaskVO> pageTasks(int page, int size, Integer status, String keyword, Long assigneeId, boolean mine) {
+        LambdaQueryWrapper<ReleaseFailTask> wrapper = new LambdaQueryWrapper<ReleaseFailTask>()
+                .eq(status != null, ReleaseFailTask::getStatus, status)
+                .eq(assigneeId != null, ReleaseFailTask::getAssigneeId, assigneeId)
+                .orderByDesc(ReleaseFailTask::getCreateTime)
+                .orderByDesc(ReleaseFailTask::getId);
+        if (mine) {
+            long current = currentUserId();
+            wrapper.eq(ReleaseFailTask::getAssigneeId, current)
+                    .in(ReleaseFailTask::getStatus, FailTaskStatus.PENDING.getCode(), FailTaskStatus.PROCESSING.getCode());
+        }
+        if (StringUtils.hasText(keyword)) {
+            String kw = keyword.trim();
+            // 关联发布记录的分支/版本匹配
+            List<ReleaseRecord> records = recordMapper.selectList(new LambdaQueryWrapper<ReleaseRecord>()
+                    .and(w -> w.like(ReleaseRecord::getBranch, kw).or().like(ReleaseRecord::getVersion, kw)));
+            List<Long> recordIds = records.stream().map(ReleaseRecord::getId).collect(Collectors.toList());
+            wrapper.and(w -> w.like(ReleaseFailTask::getTaskNo, kw)
+                    .or().like(ReleaseFailTask::getSummary, kw)
+                    .or(CollectionUtils.isEmpty(recordIds) ? null : w2 -> w2.in(ReleaseFailTask::getRecordId, recordIds)));
+        }
+
+        IPage<ReleaseFailTask> p = taskMapper.selectPage(new Page<>(page, size), wrapper);
+        List<FailTaskVO> vos = buildVOs(p.getRecords());
+        IPage<FailTaskVO> result = new Page<>(p.getCurrent(), p.getSize(), p.getTotal());
+        result.setRecords(vos);
+        return result;
+    }
+
+    @Override
+    public FailTaskDetailVO detail(Long id) {
+        ReleaseFailTask task = getTaskOrThrow(id);
+        // 复用列表页组装逻辑，补全发布记录/机型/用户名信息
+        FailTaskVO base = buildVOs(Collections.singletonList(task)).get(0);
+        FailTaskDetailVO vo = new FailTaskDetailVO();
+        BeanUtils.copyProperties(base, vo);
+        List<ReleaseFailCase> cases = listCases(id);
+        vo.setCases(toCaseVOs(cases));
+        return vo;
+    }
+
+    /* ==================== 阶段4：CRUD ==================== */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ReleaseFailTask create(FailTaskCreateDTO dto) {
+        if (dto.getRecordId() != null) {
+            ReleaseRecord record = recordMapper.selectById(dto.getRecordId());
+            if (record == null) {
+                throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "关联的发布记录不存在");
+            }
+            if (record.getResult() == null || record.getResult() != 2) {
+                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "仅失败状态的发布记录可关联失败任务");
+            }
+            if (getByRecordId(record.getId()) != null) {
+                throw new BusinessException(ErrorCode.DATA_EXIST, "该发布记录已存在失败任务");
+            }
+        }
+        checkUserExists(dto.getAssigneeId());
+
+        ReleaseFailTask task = new ReleaseFailTask();
+        task.setTaskNo(genTaskNo());
+        task.setRecordId(dto.getRecordId());
+        task.setStatus(FailTaskStatus.PENDING.getCode());
+        task.setSummary(dto.getSummary());
+        task.setFailReason(dto.getFailReason());
+        task.setFixPlan(dto.getFixPlan());
+        task.setAssigneeId(dto.getAssigneeId());
+        task.setCreatorId(currentUserId());
+        taskMapper.insert(task);
+
+        if (!CollectionUtils.isEmpty(dto.getCases())) {
+            for (FailTaskCreateDTO.FailCaseItemDTO item : dto.getCases()) {
+                ReleaseFailCase c = new ReleaseFailCase();
+                c.setTaskId(task.getId());
+                c.setCaseType("error".equals(item.getCaseType()) ? "error" : "failed");
+                c.setCaseName(item.getCaseName());
+                c.setCaseLog(item.getCaseLog());
+                c.setStatus(FailCaseStatus.PENDING.getCode());
+                c.setAssigneeId(dto.getAssigneeId());
+                caseMapper.insert(c);
+            }
+        }
+        log.info("[失败任务] 手动创建 taskNo={}, cases={}", task.getTaskNo(),
+                dto.getCases() == null ? 0 : dto.getCases().size());
+        return task;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(FailTaskUpdateDTO dto) {
+        ReleaseFailTask task = getTaskOrThrow(dto.getId());
+        checkOperatePermission(task);
+        if (StringUtils.hasText(dto.getSummary())) {
+            task.setSummary(dto.getSummary());
+        }
+        task.setFailReason(dto.getFailReason());
+        task.setFixPlan(dto.getFixPlan());
+        taskMapper.updateById(task);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        ReleaseFailTask task = getTaskOrThrow(id);
+        checkManagePermission(task);
+        // 级联删除用例明细（逻辑删除）
+        caseMapper.delete(new LambdaQueryWrapper<ReleaseFailCase>().eq(ReleaseFailCase::getTaskId, id));
+        taskMapper.deleteById(id);
+        log.info("[失败任务] 删除 taskNo={}", task.getTaskNo());
+    }
+
+    /* ==================== 阶段4：指派/流转/处理 ==================== */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void assign(FailTaskAssignDTO dto) {
+        ReleaseFailTask task = getTaskOrThrow(dto.getId());
+        checkManagePermission(task);
+        FailTaskStatus current = FailTaskStatus.of(task.getStatus());
+        if (current == FailTaskStatus.COMPLETED || current == FailTaskStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能重新指派");
+        }
+        checkUserExists(dto.getAssigneeId());
+        task.setAssigneeId(dto.getAssigneeId());
+        taskMapper.updateById(task);
+        // 待处理用例继承任务责任人
+        List<ReleaseFailCase> cases = listCases(task.getId());
+        for (ReleaseFailCase c : cases) {
+            if (c.getStatus() != null && c.getStatus() == FailCaseStatus.PENDING.getCode()) {
+                c.setAssigneeId(dto.getAssigneeId());
+                caseMapper.updateById(c);
+            }
+        }
+        log.info("[失败任务] 指派 taskNo={} -> userId={}", task.getTaskNo(), dto.getAssigneeId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void changeStatus(FailTaskStatusDTO dto) {
+        ReleaseFailTask task = getTaskOrThrow(dto.getId());
+        checkOperatePermission(task);
+        FailTaskStatus current = FailTaskStatus.of(task.getStatus());
+        FailTaskStatus target = FailTaskStatus.of(dto.getStatus());
+        if (current == null || target == null || current == target) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "非法的状态流转");
+        }
+        if (current == FailTaskStatus.COMPLETED || current == FailTaskStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能流转");
+        }
+        if (target == FailTaskStatus.COMPLETED) {
+            List<ReleaseFailCase> cases = listCases(task.getId());
+            boolean allDone = cases.stream()
+                    .allMatch(c -> c.getStatus() != null && c.getStatus() >= FailCaseStatus.FIXED.getCode());
+            if (!allDone) {
+                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "存在未处理完成的用例，请先处理全部用例");
+            }
+        }
+        task.setStatus(target.getCode());
+        task.setHandleTime(target == FailTaskStatus.COMPLETED ? LocalDateTime.now() : null);
+        taskMapper.updateById(task);
+        log.info("[失败任务] 状态流转 taskNo={} {} -> {}", task.getTaskNo(), current.getDesc(), target.getDesc());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleCase(FailCaseHandleDTO dto) {
+        ReleaseFailCase c = caseMapper.selectById(dto.getCaseId());
+        if (c == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用例明细不存在");
+        }
+        ReleaseFailTask task = taskMapper.selectById(c.getTaskId());
+        if (task == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
+        }
+        checkOperatePermission(task);
+        FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
+        if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
+        }
+
+        FailCaseStatus current = FailCaseStatus.of(c.getStatus());
+        FailCaseStatus target = FailCaseStatus.of(dto.getStatus());
+        if (current == null || target == null || current == target) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "非法的用例状态流转");
+        }
+        // 已处理完成的用例仅允许回退到处理中，不允许回到待处理
+        if (current.getCode() >= FailCaseStatus.FIXED.getCode() && target == FailCaseStatus.PENDING) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "已处理完成的用例不能回退为待处理");
+        }
+        if (target == FailCaseStatus.FIXED || target == FailCaseStatus.NOT_DEFECT) {
+            if (!StringUtils.hasText(dto.getFailReason()) && !StringUtils.hasText(dto.getFixPlan())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "请填写失败原因或修改方案");
+            }
+            c.setHandleTime(LocalDateTime.now());
+        }
+        c.setStatus(target.getCode());
+        c.setFailReason(dto.getFailReason());
+        c.setFixPlan(dto.getFixPlan());
+        if (c.getAssigneeId() == null) {
+            c.setAssigneeId(currentUserId());
+        }
+        caseMapper.updateById(c);
+
+        // 联动刷新任务状态
+        refreshTaskStatus(task.getId());
+        log.info("[失败任务] 处理用例 taskNo={} caseId={} {} -> {}", task.getTaskNo(), c.getId(),
+                current.getDesc(), target.getDesc());
+    }
+
+    @Override
+    public List<FailCaseGroupedVO> listGroupedCases(FailCaseGroupedQuery query) {
+        LocalDate date = query.getDate() == null ? LocalDate.now() : query.getDate();
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(java.time.LocalTime.MAX);
+
+        LambdaQueryWrapper<ReleaseRecord> rw = new LambdaQueryWrapper<ReleaseRecord>()
+                .between(ReleaseRecord::getPublishTime, start, end)
+                .eq(ReleaseRecord::getResult, ReleaseResult.FAILED.getCode());
+        if (StringUtils.hasText(query.getBranch())) {
+            rw.like(ReleaseRecord::getBranch, query.getBranch().trim());
+        }
+        List<ReleaseRecord> records = recordMapper.selectList(rw);
+        if (CollectionUtils.isEmpty(records)) {
+            return new ArrayList<>();
+        }
+
+        Set<Long> recordIds = records.stream().map(ReleaseRecord::getId).collect(Collectors.toSet());
+        Map<Long, ReleaseRecord> recordMap = records.stream()
+                .collect(Collectors.toMap(ReleaseRecord::getId, Function.identity()));
+        Map<Long, List<String>> recordProjectMap = buildRecordProjectMap(recordIds);
+
+        List<ReleaseFailTask> tasks = taskMapper.selectList(
+                new LambdaQueryWrapper<ReleaseFailTask>().in(ReleaseFailTask::getRecordId, recordIds));
+        if (CollectionUtils.isEmpty(tasks)) {
+            return new ArrayList<>();
+        }
+        Set<Long> taskIds = tasks.stream().map(ReleaseFailTask::getId).collect(Collectors.toSet());
+        Map<Long, List<ReleaseFailCase>> casesByTask = new HashMap<>();
+        LambdaQueryWrapper<ReleaseFailCase> cw = new LambdaQueryWrapper<ReleaseFailCase>()
+                .in(ReleaseFailCase::getTaskId, taskIds);
+        if (StringUtils.hasText(query.getCaseName())) {
+            cw.like(ReleaseFailCase::getCaseName, query.getCaseName().trim());
+        }
+        List<ReleaseFailCase> allCases = caseMapper.selectList(cw);
+        for (ReleaseFailCase c : allCases) {
+            casesByTask.computeIfAbsent(c.getTaskId(), k -> new ArrayList<>()).add(c);
+        }
+
+        Set<Long> userIds = new HashSet<>();
+        tasks.forEach(t -> {
+            if (t.getAssigneeId() != null) {
+                userIds.add(t.getAssigneeId());
+            }
+        });
+        userIds.addAll(casesByTask.values().stream().flatMap(List::stream)
+                .map(ReleaseFailCase::getAssigneeId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()));
+        Map<Long, String> userMap = userIds.isEmpty() ? Collections.emptyMap()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, u -> {
+                            String name = u.getNickname();
+                            return StringUtils.hasText(name) ? name : u.getUsername();
+                        }));
+
+        Map<String, FailCaseGroupedVO> groupMap = new LinkedHashMap<>();
+        // 收集每个分组（分支×机型）涉及的原始报告文件ID
+        Map<String, Set<Long>> groupFileIds = new HashMap<>();
+        for (ReleaseFailTask task : tasks) {
+            ReleaseRecord record = recordMap.get(task.getRecordId());
+            if (record == null) {
+                continue;
+            }
+            List<String> projectNames = recordProjectMap.getOrDefault(record.getId(), Collections.emptyList());
+            if (CollectionUtils.isEmpty(projectNames)) {
+                projectNames = Collections.singletonList("未知机型");
+            }
+            List<ReleaseFailCase> cases = casesByTask.getOrDefault(task.getId(), Collections.emptyList());
+            if (CollectionUtils.isEmpty(cases)) {
+                continue;
+            }
+            for (String projectName : projectNames) {
+                if (StringUtils.hasText(query.getProjectName())
+                        && !projectName.contains(query.getProjectName().trim())) {
+                    continue;
+                }
+                String key = record.getBranch() + "#" + projectName;
+                if (record.getReportFileId() != null) {
+                    groupFileIds.computeIfAbsent(key, k -> new HashSet<>()).add(record.getReportFileId());
+                }
+                FailCaseGroupedVO group = groupMap.computeIfAbsent(key, k -> {
+                    FailCaseGroupedVO g = new FailCaseGroupedVO();
+                    String[] parts = k.split("#", 2);
+                    g.setBranch(parts[0]);
+                    g.setProjectName(parts[1]);
+                    g.setTotalCount(0);
+                    g.setPassedCount(0);
+                    g.setFailedCount(0);
+                    g.setPassRate(0);
+                    g.setCases(new ArrayList<>());
+                    return g;
+                });
+                group.setTotalCount(group.getTotalCount() + nvl(record.getTotalCount()));
+                group.setPassedCount(group.getPassedCount() + nvl(record.getPassedCount()));
+                group.setFailedCount(group.getFailedCount() + (nvl(record.getTotalCount()) - nvl(record.getPassedCount())));
+                for (ReleaseFailCase c : cases) {
+                    GroupedFailCaseVO gcv = new GroupedFailCaseVO();
+                    BeanUtils.copyProperties(c, gcv);
+                    gcv.setRecordId(record.getId());
+                    gcv.setTaskId(task.getId());
+                    FailCaseStatus st = FailCaseStatus.of(c.getStatus());
+                    gcv.setStatusDesc(st == null ? null : st.getDesc());
+                    gcv.setCaseTypeDesc("error".equals(c.getCaseType()) ? "错误" : "失败");
+                    gcv.setAssigneeName(c.getAssigneeId() == null ? null : userMap.get(c.getAssigneeId()));
+                    gcv.setPublishTime(record.getPublishTime());
+                    group.getCases().add(gcv);
+                }
+            }
+        }
+
+        for (FailCaseGroupedVO group : groupMap.values()) {
+            int total = group.getTotalCount();
+            int passed = group.getPassedCount();
+            group.setPassRate(total > 0 ? (int) Math.round(passed * 100.0 / total) : 0);
+        }
+
+        // 批量查询分组涉及的原始 HTML 报告文件
+        Set<Long> allFileIds = groupFileIds.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
+        Map<Long, String> fileNameMap = allFileIds.isEmpty() ? Collections.emptyMap()
+                : fileResourceMapper.selectBatchIds(allFileIds).stream()
+                        .collect(Collectors.toMap(FileResource::getId, FileResource::getFileName));
+        for (FailCaseGroupedVO group : groupMap.values()) {
+            Set<Long> ids = groupFileIds.getOrDefault(group.getBranch() + "#" + group.getProjectName(),
+                    Collections.emptySet());
+            List<ReportFileItemVO> files = ids.stream()
+                    .filter(fileNameMap::containsKey)
+                    .map(id -> {
+                        ReportFileItemVO item = new ReportFileItemVO();
+                        item.setFileId(id);
+                        item.setFileName(fileNameMap.get(id));
+                        return item;
+                    })
+                    .collect(Collectors.toList());
+            group.setReportFiles(files);
+        }
+
+        return groupMap.values().stream()
+                .sorted(java.util.Comparator.comparing(FailCaseGroupedVO::getBranch)
+                        .thenComparing(FailCaseGroupedVO::getProjectName))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateCase(Long caseId, FailCaseUpdateDTO dto) {
+        ReleaseFailCase c = caseMapper.selectById(caseId);
+        if (c == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用例明细不存在");
+        }
+        ReleaseFailTask task = taskMapper.selectById(c.getTaskId());
+        if (task == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
+        }
+        checkOperatePermission(task);
+        FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
+        if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
+        }
+
+        FailCaseStatus current = FailCaseStatus.of(c.getStatus());
+        FailCaseStatus target = FailCaseStatus.of(dto.getStatus());
+        if (current == null || target == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "非法的用例状态");
+        }
+        if (current != target) {
+            if (current.getCode() >= FailCaseStatus.FIXED.getCode() && target == FailCaseStatus.PENDING) {
+                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "已处理完成的用例不能回退为待处理");
+            }
+            if (target == FailCaseStatus.FIXED || target == FailCaseStatus.NOT_DEFECT) {
+                if (c.getHandleTime() == null) {
+                    c.setHandleTime(LocalDateTime.now());
+                }
+            }
+            c.setStatus(target.getCode());
+        }
+        c.setAssigneeId(dto.getAssigneeId());
+        c.setFailReason(dto.getFailReason());
+        c.setFixPlan(dto.getFixPlan());
+        if (dto.getIsBug() != null) {
+            c.setIsBug(dto.getIsBug());
+        }
+        c.setProgress(dto.getProgress());
+        c.setConclusion(dto.getConclusion());
+        caseMapper.updateById(c);
+
+        refreshTaskStatus(task.getId());
+        log.info("[失败任务] 更新用例 taskNo={} caseId={} status={}", task.getTaskNo(), c.getId(), dto.getStatus());
+    }
+
+    /* ==================== 私有方法：联动规则与组装 ==================== */
+
+    /**
+     * 任务状态与明细状态联动规则：
+     * <ul>
+     *   <li>存在任一处理中(2)明细 → 任务=处理中</li>
+     *   <li>全部明细∈{已修复(3),非缺陷(4)} → 任务=已完成并记录完成时间</li>
+     *   <li>其余（存在待处理且无处理中）→ 任务=待处理</li>
+     *   <li>任务处于终态(已完成/已关闭)时不自动联动</li>
+     * </ul>
+     */
+    private void refreshTaskStatus(Long taskId) {
+        ReleaseFailTask task = taskMapper.selectById(taskId);
+        if (task == null || task.getStatus() == null) {
+            return;
+        }
+        FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
+        if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
+            return;
+        }
+        List<ReleaseFailCase> cases = listCases(taskId);
+        if (cases.isEmpty()) {
+            return;
+        }
+        boolean allDone = cases.stream()
+                .allMatch(c -> c.getStatus() != null && c.getStatus() >= FailCaseStatus.FIXED.getCode());
+        boolean anyProcessing = cases.stream()
+                .anyMatch(c -> c.getStatus() != null && c.getStatus() == FailCaseStatus.PROCESSING.getCode());
+        if (allDone) {
+            task.setStatus(FailTaskStatus.COMPLETED.getCode());
+            task.setHandleTime(LocalDateTime.now());
+        } else if (anyProcessing) {
+            task.setStatus(FailTaskStatus.PROCESSING.getCode());
+            task.setHandleTime(null);
+        } else {
+            task.setStatus(FailTaskStatus.PENDING.getCode());
+            task.setHandleTime(null);
+        }
+        taskMapper.updateById(task);
+    }
+
+    private List<FailTaskVO> buildVOs(List<ReleaseFailTask> tasks) {
+        if (CollectionUtils.isEmpty(tasks)) {
+            return new ArrayList<>();
+        }
+        List<Long> taskIds = tasks.stream().map(ReleaseFailTask::getId).collect(Collectors.toList());
+        Set<Long> recordIds = tasks.stream().map(ReleaseFailTask::getRecordId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> userIds = new HashSet<>();
+        tasks.forEach(t -> {
+            if (t.getAssigneeId() != null) {
+                userIds.add(t.getAssigneeId());
+            }
+            if (t.getCreatorId() != null) {
+                userIds.add(t.getCreatorId());
+            }
+        });
+
+        Map<Long, ReleaseRecord> recordMap = recordIds.isEmpty() ? Collections.emptyMap()
+                : recordMapper.selectBatchIds(recordIds).stream()
+                        .collect(Collectors.toMap(ReleaseRecord::getId, Function.identity()));
+        Map<Long, List<String>> recordProjectMap = buildRecordProjectMap(recordIds);
+        Map<Long, String> userMap = userIds.isEmpty() ? Collections.emptyMap()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, u -> {
+                            String name = u.getNickname();
+                            return StringUtils.hasText(name) ? name : u.getUsername();
+                        }));
+        Map<Long, int[]> caseStats = buildCaseStats(taskIds);
+
+        return tasks.stream().map(t -> toVO(t, recordMap, recordProjectMap, userMap, caseStats))
+                .collect(Collectors.toList());
+    }
+
+    private FailTaskVO toVO(ReleaseFailTask t) {
+        return toVO(t, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    private FailTaskVO toVO(ReleaseFailTask t, Map<Long, ReleaseRecord> recordMap,
+                            Map<Long, List<String>> recordProjectMap, Map<Long, String> userMap,
+                            Map<Long, int[]> caseStats) {
+        FailTaskVO vo = new FailTaskVO();
+        BeanUtils.copyProperties(t, vo);
+        ReleaseRecord r = recordMap.get(t.getRecordId());
+        if (r != null) {
+            vo.setBranch(r.getBranch());
+            vo.setVersion(r.getVersion());
+        }
+        vo.setProjectNames(recordProjectMap.getOrDefault(t.getRecordId(), Collections.emptyList()));
+        FailTaskStatus st = FailTaskStatus.of(t.getStatus());
+        vo.setStatusDesc(st == null ? null : st.getDesc());
+        vo.setAssigneeName(t.getAssigneeId() == null ? null : userMap.get(t.getAssigneeId()));
+        vo.setCreatorName(t.getCreatorId() == null ? null : userMap.get(t.getCreatorId()));
+        int[] stat = caseStats.get(t.getId());
+        vo.setCaseTotal(stat == null ? 0 : stat[0]);
+        vo.setCasePending(stat == null ? 0 : stat[1]);
+        vo.setCaseProcessing(stat == null ? 0 : stat[2]);
+        vo.setCaseDone(stat == null ? 0 : stat[3]);
+        return vo;
+    }
+
+    private List<FailCaseVO> toCaseVOs(List<ReleaseFailCase> cases) {
+        if (CollectionUtils.isEmpty(cases)) {
+            return new ArrayList<>();
+        }
+        Set<Long> userIds = cases.stream().map(ReleaseFailCase::getAssigneeId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> userMap = userIds.isEmpty() ? Collections.emptyMap()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, u -> {
+                            String name = u.getNickname();
+                            return StringUtils.hasText(name) ? name : u.getUsername();
+                        }));
+        return cases.stream().map(c -> {
+            FailCaseVO vo = new FailCaseVO();
+            BeanUtils.copyProperties(c, vo);
+            FailCaseStatus st = FailCaseStatus.of(c.getStatus());
+            vo.setStatusDesc(st == null ? null : st.getDesc());
+            vo.setCaseTypeDesc("error".equals(c.getCaseType()) ? "错误" : "失败");
+            vo.setAssigneeName(c.getAssigneeId() == null ? null : userMap.get(c.getAssigneeId()));
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    /** recordId -> [total, pending, processing, done(已修复+非缺陷)] */
+    private Map<Long, int[]> buildCaseStats(List<Long> taskIds) {
+        if (CollectionUtils.isEmpty(taskIds)) {
+            return Collections.emptyMap();
+        }
+        List<ReleaseFailCase> cases = caseMapper.selectList(new LambdaQueryWrapper<ReleaseFailCase>()
+                .in(ReleaseFailCase::getTaskId, taskIds));
+        Map<Long, int[]> map = new HashMap<>();
+        for (ReleaseFailCase c : cases) {
+            int[] stat = map.computeIfAbsent(c.getTaskId(), k -> new int[4]);
+            stat[0]++;
+            if (c.getStatus() != null && c.getStatus() >= FailCaseStatus.FIXED.getCode()) {
+                stat[3]++;
+            } else if (c.getStatus() != null && c.getStatus() == FailCaseStatus.PROCESSING.getCode()) {
+                stat[2]++;
+            } else {
+                stat[1]++;
+            }
+        }
+        return map;
+    }
+
+    /** recordId -> List<机型名> */
+    private Map<Long, List<String>> buildRecordProjectMap(Set<Long> recordIds) {
+        if (CollectionUtils.isEmpty(recordIds)) {
+            return Collections.emptyMap();
+        }
+        List<ReleaseRecordProject> links = recordProjectMapper.selectList(
+                new LambdaQueryWrapper<ReleaseRecordProject>().in(ReleaseRecordProject::getRecordId, recordIds));
+        if (CollectionUtils.isEmpty(links)) {
+            return Collections.emptyMap();
+        }
+        Set<Long> projectIds = links.stream().map(ReleaseRecordProject::getProjectId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> nameMap = projectIds.isEmpty() ? Collections.emptyMap()
+                : projectMapper.selectBatchIds(projectIds).stream()
+                        .collect(Collectors.toMap(ReleaseProject::getId, ReleaseProject::getProjectName));
+        Map<Long, List<String>> result = new HashMap<>();
+        for (ReleaseRecordProject link : links) {
+            String name = nameMap.get(link.getProjectId());
+            if (StringUtils.hasText(name)) {
+                result.computeIfAbsent(link.getRecordId(), k -> new ArrayList<>()).add(name);
+            }
+        }
+        return result;
+    }
+
+    private ReleaseFailTask getTaskOrThrow(Long id) {
+        ReleaseFailTask task = id == null ? null : taskMapper.selectById(id);
+        if (task == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "失败任务不存在");
+        }
+        return task;
+    }
+
+    private void checkUserExists(Long userId) {
+        if (userId != null && userMapper.selectById(userId) == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "指定的责任人不存在");
+        }
+    }
+
+    /* ==================== 私有方法：权限校验（供测试 spy 覆盖） ==================== */
+
+    protected long currentUserId() {
+        return StpUtil.getLoginIdAsLong();
+    }
+
+    protected boolean isSuperAdmin() {
+        return StpUtil.hasRole("super_admin");
+    }
+
+    /**
+     * 操作权限：仅任务创建人、被指派人或超管可流转/处理
+     */
+    protected void checkOperatePermission(ReleaseFailTask task) {
+        long current = currentUserId();
+        if (isSuperAdmin()) {
+            return;
+        }
+        boolean isCreator = task.getCreatorId() != null && task.getCreatorId().equals(current);
+        boolean isAssignee = task.getAssigneeId() != null && task.getAssigneeId().equals(current);
+        if (!isCreator && !isAssignee) {
+            throw new BusinessException(ErrorCode.NO_PERMISSION, "仅任务创建人或被指派人可操作");
+        }
+    }
+
+    /**
+     * 管理权限：仅任务创建人或超管可删除/指派
+     */
+    protected void checkManagePermission(ReleaseFailTask task) {
+        long current = currentUserId();
+        if (isSuperAdmin()) {
+            return;
+        }
+        boolean isCreator = task.getCreatorId() != null && task.getCreatorId().equals(current);
+        if (!isCreator) {
+            throw new BusinessException(ErrorCode.NO_PERMISSION, "仅任务创建人可执行该操作");
+        }
+    }
+
     private String buildSummary(ReleaseRecord record) {
         String branch = StringUtils.hasText(record.getBranch()) ? record.getBranch() : "未知分支";
         String version = StringUtils.hasText(record.getVersion()) ? record.getVersion() : "未知版本";
         return "发布 " + branch + (StringUtils.hasText(record.getVersion()) ? "@" + version : "")
                 + " 存在 " + record.getFailedCount() + " 个失败用例";
+    }
+
+    private int nvl(Integer value) {
+        return value == null ? 0 : value;
     }
 }

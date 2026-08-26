@@ -49,6 +49,7 @@ public class JenkinsPushController {
     public Result<Long> pushWithReport(@RequestHeader(value = "X-Api-Token", required = false) String token,
                                        @RequestParam("branch") String branch,
                                        @RequestParam(value = "version", required = false) String version,
+                                       @RequestParam(value = "imageUrl", required = false) String imageUrl,
                                        @RequestParam("projectCodes") String projectCodes,
                                        @RequestParam(value = "remark", required = false) String remark,
                                        @RequestPart("file") MultipartFile file) {
@@ -62,7 +63,7 @@ public class JenkinsPushController {
         }
         FileStorageService.StoredFile stored = fileStorageService.storeReportFile(file);
         try {
-            Long id = recordService.createFromJenkinsWithReport(branch.trim(), version, codes, remark, stored);
+            Long id = recordService.createFromJenkinsWithReport(branch.trim(), version, imageUrl, codes, remark, stored);
             log.info("[Jenkins] 推送入库成功 recordId={}, branch={}", id, branch);
             return Result.ok(id);
         } catch (BusinessException e) {

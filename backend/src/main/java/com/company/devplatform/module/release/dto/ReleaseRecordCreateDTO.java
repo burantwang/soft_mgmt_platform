@@ -21,6 +21,9 @@ public class ReleaseRecordCreateDTO {
     @Size(max = 128, message = "版本号最长128字符")
     private String version;
 
+    @Size(max = 500, message = "镜像地址最长500字符")
+    private String imageUrl;
+
     /** 发布结果:1成功 2失败 */
     @NotNull(message = "发布结果不能为空")
     private Integer result;
