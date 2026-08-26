@@ -1,0 +1,39 @@
+package com.company.devplatform.module.auth.vo;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 用户 VO
+ */
+@Data
+public class UserVO {
+
+    private Long id;
+
+    private String username;
+
+    private String nickname;
+
+    private String email;
+
+    private String phone;
+
+    /** 状态:1正常 0禁用 */
+    private Integer status;
+
+    /** 是否强制改密:1是 0否 */
+    private Integer mustChangePwd;
+
+    private String remark;
+
+    /** 角色ID列表(编辑回显) */
+    private List<Long> roleIds;
+
+    /** 角色名称列表(展示) */
+    private List<String> roleNames;
+
+    private LocalDateTime createTime;
+}

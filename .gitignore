@@ -1,0 +1,19 @@
+# ============ 依赖与构建产物（可重新生成，不随代码迁移） ============
+node_modules/
+backend/target/
+frontend/dist/
+*.log
+
+# ============ 运行时数据（随环境迁移，不走版本库） ============
+backend/data/
+
+# ============ IDE / 系统文件 ============
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ============ 环境配置（含密码，不入库） ============
+.env
+.env.local

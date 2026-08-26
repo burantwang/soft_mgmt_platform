@@ -1,0 +1,62 @@
+# ============================================================
+# 应用公共配置（不含环境差异化配置，敏感项全部由环境变量注入）
+# ============================================================
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: dev-platform
+  profiles:
+    active: ${APP_ENV:dev}
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.company.devplatform.**.domain.entity
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      # 全局逻辑删除配置
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+sa-token:
+  # token 名称与请求头
+  token-name: Authorization
+  token-prefix: Bearer
+  # 登录有效期 2 小时
+  timeout: 7200
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: false
+
+# 文件存储根路径（环境变量注入）
+file:
+  storage:
+    root: ${FILE_STORAGE_ROOT:./data/files}
+
+# Jenkins 推送接口鉴权 Token（环境变量注入）
+api:
+  push:
+    token: ${API_PUSH_TOKEN:dev-platform-push-token}
+
+# 超管账号初始密码（环境变量注入，首次登录强制改密）
+admin:
+  init-password: ${ADMIN_INIT_PASSWORD:Admin@123}

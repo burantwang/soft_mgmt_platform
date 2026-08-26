@@ -1,0 +1,11 @@
+# 测试环境配置（全部由环境变量注入，无本地默认值）
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+logging:
+  level:
+    com.company.devplatform: info

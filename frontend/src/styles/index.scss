@@ -1,0 +1,85 @@
+/* ============================================================
+ * 全局设计令牌与基础样式
+ * 统一：主色 / 状态色 / 间距 / 圆角 / 字体 / 阴影
+ * ============================================================ */
+
+:root {
+  /* 品牌色 */
+  --brand-color: #2b5be3;
+  --brand-color-light: #eaf0ff;
+  /* 状态色 */
+  --success-color: #16a34a;
+  --danger-color: #dc2626;
+  --warning-color: #d97706;
+  --info-color: #6b7280;
+  /* 中性色 */
+  --bg-page: #f5f7fa;
+  --bg-card: #ffffff;
+  --text-main: #1f2937;
+  --text-sub: #6b7280;
+  --border-color: #e5e7eb;
+  /* 布局 */
+  --layout-sidebar-width: 220px;
+  --layout-sidebar-collapsed-width: 64px;
+  --layout-header-height: 56px;
+  /* 圆角与阴影 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+  /* 字体 */
+  --font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: 14px;
+  color: var(--text-main);
+  background-color: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 页面通用容器：三段式（标题 + 操作区 + 内容区） */
+.page-container {
+  padding: 16px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.page-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+
+/* 表格工具条（筛选区） */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}

@@ -1,0 +1,11 @@
+# 开发环境配置（本地默认值仅供本地开发，敏感项仍需环境变量注入）
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://localhost:3306/dev_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+
+logging:
+  level:
+    com.company.devplatform: debug
