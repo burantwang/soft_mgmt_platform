@@ -101,6 +101,7 @@ CREATE TABLE `release_fail_case` (
   `is_bug` tinyint DEFAULT '0' COMMENT '是否提Bug:0否 1是',
   `progress` varchar(255) DEFAULT NULL COMMENT '分析进展',
   `conclusion` varchar(1000) DEFAULT NULL COMMENT '结论',
+  `ai_analysis` longtext COMMENT 'AI辅助分析描述(原因分析、修改建议等)',
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态:1待处理 2处理中 3已完成 4已关闭',
   `assignee_id` bigint DEFAULT NULL COMMENT '责任人(默认继承任务责任人)',
   `handle_time` datetime DEFAULT NULL COMMENT '处理时间',

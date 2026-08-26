@@ -46,6 +46,9 @@ public class ReleaseFailCase {
     /** 结论 */
     private String conclusion;
 
+    /** AI辅助分析描述（原因分析、修改建议等） */
+    private String aiAnalysis;
+
     /** 状态:1待处理 2处理中 3已完成 4已关闭 */
     private Integer status;
 

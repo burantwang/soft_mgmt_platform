@@ -35,4 +35,8 @@ public class FailCaseUpdateDTO {
     /** 结论 */
     @Size(max = 1000, message = "结论不能超过1000字")
     private String conclusion;
+
+    /** AI辅助分析描述（AI 生成，原因分析、修改建议等） */
+    @Size(max = 10000, message = "AI分析描述不能超过10000字")
+    private String aiAnalysis;
 }

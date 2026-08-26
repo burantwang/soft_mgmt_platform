@@ -44,6 +44,8 @@ export interface UserInfo {
   remark?: string
   roleIds?: number[]
   roleNames?: string[]
+  /** 角色编码列表：super_admin/admin/employee */
+  roleCodes?: string[]
   createTime?: string
 }
 

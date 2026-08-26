@@ -511,6 +511,37 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
         }
 
+        // 前置条件校验：仅普通用户遵循，管理员（超管/普通管理员）豁免
+        if (!isAdmin()) {
+            if (c.getAssigneeId() == null) {
+                // 未指派责任人：仅允许指派责任人，其余栏位禁止修改
+                if (dto.getAssigneeId() == null) {
+                    throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再编辑");
+                }
+                boolean touchOther = StringUtils.hasText(dto.getFailReason())
+                        || StringUtils.hasText(dto.getFixPlan())
+                        || StringUtils.hasText(dto.getProgress())
+                        || StringUtils.hasText(dto.getConclusion())
+                        || dto.getIsBug() != null
+                        || StringUtils.hasText(dto.getAiAnalysis())
+                        || (dto.getStatus() != null && !dto.getStatus().equals(c.getStatus()));
+                if (touchOther) {
+                    throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再填写其他信息");
+                }
+            } else {
+                // 已指派责任人：状态变更需失败原因、结论进展、AI分析描述均已填写
+                Integer targetStatus = dto.getStatus();
+                if (targetStatus != null && !targetStatus.equals(c.getStatus())) {
+                    String reason = StringUtils.hasText(dto.getFailReason()) ? dto.getFailReason() : c.getFailReason();
+                    String progress = StringUtils.hasText(dto.getProgress()) ? dto.getProgress() : c.getProgress();
+                    String analysis = StringUtils.hasText(dto.getAiAnalysis()) ? dto.getAiAnalysis() : c.getAiAnalysis();
+                    if (!StringUtils.hasText(reason) || !StringUtils.hasText(progress) || !StringUtils.hasText(analysis)) {
+                        throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请填写失败原因、结论进展、AI分析描述后再更新状态");
+                    }
+                }
+            }
+        }
+
         FailCaseStatus current = FailCaseStatus.of(c.getStatus());
         FailCaseStatus target = FailCaseStatus.of(dto.getStatus());
         if (current == null || target == null) {
@@ -535,6 +566,9 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         }
         c.setProgress(dto.getProgress());
         c.setConclusion(dto.getConclusion());
+        if (dto.getAiAnalysis() != null) {
+            c.setAiAnalysis(dto.getAiAnalysis());
+        }
         caseMapper.updateById(c);
 
         refreshTaskStatus(task.getId());
@@ -734,6 +768,11 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
 
     protected boolean isSuperAdmin() {
         return StpUtil.hasRole("super_admin");
+    }
+
+    /** 是否管理员：超管或普通管理员（普通员工不视为管理员） */
+    protected boolean isAdmin() {
+        return StpUtil.hasRole("super_admin") || StpUtil.hasRole("admin");
     }
 
     /**

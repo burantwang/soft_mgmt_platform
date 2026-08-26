@@ -196,6 +196,8 @@ export interface FailCaseVO {
   assigneeName?: string
   failReason?: string
   fixPlan?: string
+  /** AI辅助分析描述 */
+  aiAnalysis?: string
   handleTime?: string
 }
 
@@ -256,6 +258,8 @@ export interface FailCaseUpdateForm {
   isBug?: number
   progress?: string
   conclusion?: string
+  /** AI辅助分析描述 */
+  aiAnalysis?: string
 }
 
 /** 分支×机型分组的失败用例明细 */
@@ -276,6 +280,8 @@ export interface GroupedFailCase {
   isBug?: number
   progress?: string
   conclusion?: string
+  /** AI辅助分析描述（原因分析、修改建议等） */
+  aiAnalysis?: string
   publishTime?: string
 }
 

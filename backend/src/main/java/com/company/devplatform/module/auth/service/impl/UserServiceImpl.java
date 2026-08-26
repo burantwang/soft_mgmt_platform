@@ -243,6 +243,7 @@ public class UserServiceImpl implements UserService {
             vo.setRoleIds(List.of());
             vo.setRoleNames(List.of());
         }
+        vo.setRoleCodes(getRoleCodes(user.getId()));
         return vo;
     }
 }

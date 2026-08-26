@@ -35,5 +35,8 @@ public class UserVO {
     /** 角色名称列表(展示) */
     private List<String> roleNames;
 
+    /** 角色编码列表(用于前端权限判断：super_admin/admin/employee) */
+    private List<String> roleCodes;
+
     private LocalDateTime createTime;
 }
