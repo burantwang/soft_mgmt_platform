@@ -34,6 +34,17 @@ public class FileStorageService {
 
     private static final DateTimeFormatter DATE_DIR = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
+    /** 普通附件扩展名白名单（文档/图片/压缩包/配置文件,拒绝可执行与网页类） */
+    private static final java.util.Set<String> ALLOWED_ATTACHMENT_EXT = java.util.Set.of(
+            // 文档
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "csv",
+            // 图片
+            "png", "jpg", "jpeg", "gif", "webp", "bmp",
+            // 压缩包
+            "zip", "rar", "7z", "tar", "gz",
+            // 配置文件/日志
+            "xml", "json", "yml", "yaml", "ini", "conf", "log", "sql", "properties");
+
     private final FileResourceMapper fileResourceMapper;
     private final StorageProperties storageProperties;
 
@@ -47,6 +58,59 @@ public class FileStorageService {
     public FileResource saveReport(MultipartFile file, Long uploaderId) {
         StoredFile stored = storeReportFile(file);
         return register(stored, uploaderId, FileType.REPORT);
+    }
+
+    /** 普通附件大小上限：50MB */
+    public static final long MAX_ATTACHMENT_SIZE = 50L * 1024 * 1024;
+
+    /**
+     * 保存普通附件（写盘 + 入库）
+     *
+     * @param file       上传文件
+     * @param uploaderId 上传人
+     * @param docId      关联Wiki文档ID,可为空
+     * @return 文件资源记录
+     */
+    public FileResource saveAttachment(MultipartFile file, Long uploaderId, Long docId) {
+        StoredFile stored = storeAttachment(file);
+        return register(stored, uploaderId, FileType.ATTACHMENT, docId);
+    }
+
+    /**
+     * 普通附件仅写盘并校验类型/大小（入库由 register 完成）
+     *
+     * @param file 上传文件
+     * @return 存储信息
+     */
+    public StoredFile storeAttachment(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.FILE_EMPTY);
+        }
+        if (file.getSize() > MAX_ATTACHMENT_SIZE) {
+            throw new BusinessException(ErrorCode.FILE_TOO_LARGE, "附件大小不能超过 50MB");
+        }
+        String ext = extractExt(file.getOriginalFilename());
+        if (!ALLOWED_ATTACHMENT_EXT.contains(ext)) {
+            throw new BusinessException(ErrorCode.FILE_TYPE_NOT_ALLOWED,
+                    "不允许的文件类型 ." + (ext.isEmpty() ? "(无后缀)" : ext)
+                            + "，仅支持文档/图片/压缩包等常用格式");
+        }
+        String storedPath = storageProperties.getAttachmentDir() + "/"
+                + LocalDate.now().format(DATE_DIR) + "/"
+                + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8) + "." + ext;
+        Path absolute = resolveAbsolutePath(storedPath);
+        try {
+            Files.createDirectories(absolute.getParent());
+            try (var in = file.getInputStream()) {
+                Files.copy(in, absolute, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            log.error("[存储] 附件保存失败: {}", storedPath, e);
+            throw new BusinessException(ErrorCode.FILE_SAVE_ERROR);
+        }
+        String mime = file.getContentType();
+        return new StoredFile(file.getOriginalFilename(), storedPath, ext,
+                mime == null || mime.isEmpty() ? "application/octet-stream" : mime, file.getSize());
     }
 
     /**
@@ -90,6 +154,19 @@ public class FileStorageService {
      * @return 文件资源记录
      */
     public FileResource register(StoredFile stored, Long uploaderId, FileType fileType) {
+        return register(stored, uploaderId, fileType, null);
+    }
+
+    /**
+     * 登记文件资源记录（可指定关联Wiki文档）
+     *
+     * @param stored     已落盘的存储信息
+     * @param uploaderId 上传人
+     * @param fileType   文件类型
+     * @param docId      关联Wiki文档ID,可为空
+     * @return 文件资源记录
+     */
+    public FileResource register(StoredFile stored, Long uploaderId, FileType fileType, Long docId) {
         FileResource resource = new FileResource();
         resource.setFileName(stored.getFileName());
         resource.setStoredPath(stored.getStoredPath());
@@ -97,6 +174,7 @@ public class FileStorageService {
         resource.setMimeType(stored.getMimeType());
         resource.setFileSize(stored.getFileSize());
         resource.setFileType(fileType.getCode());
+        resource.setDocId(docId);
         resource.setUploaderId(uploaderId);
         fileResourceMapper.insert(resource);
         log.info("[存储] 文件资源已登记 id={}, path={}", resource.getId(), stored.getStoredPath());

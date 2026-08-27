@@ -26,6 +26,17 @@ export const FILE_ALLOW_EXT = [
   'zip', 'rar', '7z', 'tar', 'gz'
 ] as const
 
+/**
+ * 普通附件白名单后缀（与后端 FileStorageService.ALLOWED_ATTACHMENT_EXT 对齐）
+ * 拒绝可执行/脚本/网页类文件（exe/sh/bat/html/svg/js 等）
+ */
+export const ATTACHMENT_ALLOW_EXT = [
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp',
+  'zip', 'rar', '7z', 'tar', 'gz',
+  'xml', 'json', 'yml', 'yaml', 'ini', 'conf', 'log', 'sql', 'properties'
+] as const
+
 /** 发布结果枚举（与后端 ReleaseResult 对齐） */
 export const RELEASE_RESULT = {
   SUCCESS: 1,
