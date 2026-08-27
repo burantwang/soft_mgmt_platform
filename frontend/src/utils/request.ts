@@ -32,12 +32,18 @@ service.interceptors.response.use(
       if (res.code === 200) {
         return res
       }
-      // 鉴权失效：清除登录态并跳转登录页
-      if (res.code >= 40100 && res.code < 40200) {
+      // 40100 未登录 / 40105 凭证无效：清除登录态并跳转登录页
+      if (res.code === 40100 || res.code === 40105) {
         removeToken()
         removePerms()
         router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
         ElMessage.error(res.msg || '登录已失效，请重新登录')
+        return Promise.reject(new Error(res.msg))
+      }
+      // 其余 401xx（40101 无操作权限、40102 密码错误、40103 账号禁用等）：
+      // 仅提示，不破坏登录态、不强制跳转登录页
+      if (res.code >= 40100 && res.code < 40200) {
+        ElMessage.error(res.msg || '请求失败')
         return Promise.reject(new Error(res.msg))
       }
       ElMessage.error(res.msg || '请求失败')

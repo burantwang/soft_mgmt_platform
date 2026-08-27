@@ -25,9 +25,9 @@ public class ReleaseUserController {
 
     private final SysUserMapper userMapper;
 
-    /** 启用用户下拉（指派任务责任人） */
+    /** 启用用户下拉（查看/指派任务责任人，只读数据对查看者开放） */
     @GetMapping("/users/enabled")
-    @SaCheckPermission("sonic:edit")
+    @SaCheckPermission("sonic:view")
     public Result<List<UserOptionVO>> enabledUsers() {
         List<UserOptionVO> list = userMapper.selectList(new LambdaQueryWrapper<SysUser>()
                         .eq(SysUser::getStatus, 1)
