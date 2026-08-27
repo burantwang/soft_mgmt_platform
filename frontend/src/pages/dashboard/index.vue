@@ -17,6 +17,7 @@
             :disabled-date="disabledFuture"
             :clearable="false"
             style="width: 150px"
+            @change="onDateChange"
           />
         </div>
       </header>

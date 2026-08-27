@@ -91,7 +91,7 @@ export function confirmReportApi(data: ReportConfirmForm): Promise<ApiResult<num
 
 /** 看板统计汇总，date 不传默认今天（yyyy-MM-dd） */
 export function getDashboardSummaryApi(date?: string): Promise<ApiResult<DashboardSummary>> {
-  return http.get<DashboardSummary>('/release/dashboard/summary', { params: { date } })
+  return http.get<DashboardSummary>('/release/dashboard/summary', date ? { date } : undefined)
 }
 
 /** 历史分支下拉 */
