@@ -2,7 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 /**
  * 路由配置（菜单由本表 meta 动态生成）
- * meta: { title 标题, icon 图标名, perm 权限码, hidden 是否隐藏 }
+ * meta: { title 标题, icon 图标名, perm 权限码, hidden 是否隐藏, drawer 是否以右侧抽屉打开 }
  * 扩展新模块：新增一条路由并配置 perm，主布局自动生成菜单
  */
 export const routes: RouteRecordRaw[] = [
@@ -43,15 +43,30 @@ export const routes: RouteRecordRaw[] = [
       },
       {
         path: 'task',
-        name: 'FailTask',
-        component: () => import('@/pages/task/index.vue'),
-        meta: { title: '失败任务追踪', icon: 'Warning', perm: 'sonic:view' }
-      },
-      {
-        path: 'task/mine',
-        name: 'MyTask',
-        component: () => import('@/pages/task/mine.vue'),
-        meta: { title: '我的待办', icon: 'List', hidden: true }
+        name: 'TaskGroup',
+        meta: { title: '任务追踪', icon: 'Warning', perm: 'sonic:view' },
+        children: [
+          {
+            // 独立页面入口（保留 /task，供首页卡片等跳转；不在菜单显示）
+            path: '',
+            name: 'FailTask',
+            component: () => import('@/pages/task/index.vue'),
+            meta: { title: 'DailySanity任务', hidden: true }
+          },
+          {
+            // 二级菜单项：以右侧抽屉方式打开
+            path: 'daily-sanity',
+            name: 'DailySanity',
+            component: () => import('@/pages/task/index.vue'),
+            meta: { title: 'DailySanity任务', drawer: true }
+          },
+          {
+            path: 'mine',
+            name: 'MyTask',
+            component: () => import('@/pages/task/mine.vue'),
+            meta: { title: '我的待办', icon: 'List', hidden: true }
+          }
+        ]
       },
       {
         path: 'wiki',

@@ -106,7 +106,7 @@ export async function exportRecordsApi(params: Record<string, unknown>): Promise
   return res as unknown as Blob
 }
 
-/* ==================== 失败任务追踪 ==================== */
+/* ==================== DailySanity任务 ==================== */
 
 /** 失败任务分页 */
 export function getFailTaskPageApi(params: PageQuery): Promise<ApiResult<PageResult<FailTaskVO>>> {

@@ -178,7 +178,7 @@ export interface DashboardSummary {
   trend: DashboardTrendPoint[]
 }
 
-/* ==================== 失败任务追踪 ==================== */
+/* ==================== DailySanity任务 ==================== */
 
 /** 失败用例明细 */
 export interface FailCaseVO {

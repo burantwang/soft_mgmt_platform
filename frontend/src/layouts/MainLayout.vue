@@ -9,16 +9,32 @@
         :default-active="activeMenu"
         :collapse="isCollapse"
         :collapse-transition="false"
-        router
         background-color="#1f2937"
         text-color="#cbd5e1"
         active-text-color="#ffffff"
         class="layout-menu"
+        @select="handleMenuSelect"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.title }}</template>
-        </el-menu-item>
+        <template v-for="entry in menuTree" :key="entry.path">
+          <el-sub-menu v-if="entry.type === 'group'" :index="entry.path">
+            <template #title>
+              <el-icon><component :is="entry.icon" /></el-icon>
+              <span>{{ entry.title }}</span>
+            </template>
+            <el-menu-item
+              v-for="item in entry.children"
+              :key="item.path"
+              :index="item.drawer ? 'drawer:' + item.key : item.path"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+              <template #title>{{ item.title }}</template>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="entry.path">
+            <el-icon><component :is="entry.icon" /></el-icon>
+            <template #title>{{ entry.title }}</template>
+          </el-menu-item>
+        </template>
       </el-menu>
     </el-aside>
 
@@ -53,6 +69,11 @@
       </el-main>
     </el-container>
   </el-container>
+
+  <!-- DailySanity任务：右侧抽屉 -->
+  <el-drawer v-model="dailySanityVisible" title="DailySanity任务" size="85%" destroy-on-close>
+    <TaskPage v-if="dailySanityVisible" />
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
@@ -62,40 +83,84 @@ import { ElMessageBox } from 'element-plus'
 import { routes } from '@/router/routes'
 import { useUserStore } from '@/store/user'
 import { getPerms } from '@/utils/auth'
+import TaskPage from '@/pages/task/index.vue'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
 const isCollapse = ref(false)
+const dailySanityVisible = ref(false)
 
-interface MenuItem {
+interface SubMenuItem {
+  path: string
+  key: string
+  title: string
+  icon: string
+  drawer?: boolean
+}
+
+interface MenuEntry {
+  type: 'group' | 'item'
   path: string
   title: string
   icon: string
+  children?: SubMenuItem[]
 }
 
-/** 菜单由路由表 meta 动态生成（hidden 过滤 + 权限过滤），新模块自动出现 */
-const menuItems = computed<MenuItem[]>(() => {
+/** 是否通过权限过滤（无 perm 视为公开） */
+const permOk = (c: { meta?: { perm?: string } }, perms: string[]) => {
+  const perm = c.meta?.perm
+  return !perm || perms.includes(perm)
+}
+
+/** 菜单树：严格按路由表顺序生成，含非 hidden 子路由的生成一级分组，其余为平级菜单项 */
+const menuTree = computed<MenuEntry[]>(() => {
   const root = routes.find((r) => r.path === '/')
   if (!root?.children) return []
   const perms = getPerms()
   return root.children
-    .filter((c) => c.meta && !c.meta.hidden)
-    .filter((c) => {
-      const perm = c.meta?.perm as string | undefined
-      return !perm || perms.includes(perm)
+    .filter((c) => c.meta && !c.meta.hidden && permOk(c, perms))
+    .map((c) => {
+      const kids = (c.children ?? [])
+        .filter((cc) => cc.meta && !cc.meta.hidden && permOk(cc, perms))
+        .map<SubMenuItem>((cc) => ({
+          path: `/${c.path}/${cc.path}`.replace(/\/+$/, ''),
+          key: cc.path || 'index',
+          title: (cc.meta?.title as string) || '',
+          icon: (cc.meta?.icon as string) || 'Document',
+          drawer: !!cc.meta?.drawer
+        }))
+      if (kids.length > 0) {
+        return {
+          type: 'group' as const,
+          path: `/${c.path}`,
+          title: (c.meta?.title as string) || '',
+          icon: (c.meta?.icon as string) || 'Document',
+          children: kids
+        }
+      }
+      return {
+        type: 'item' as const,
+        path: `/${c.path}`,
+        title: (c.meta?.title as string) || '',
+        icon: (c.meta?.icon as string) || 'Document'
+      }
     })
-    .map((c) => ({
-      path: `/${c.path}`,
-      title: (c.meta?.title as string) || '',
-      icon: (c.meta?.icon as string) || 'Document'
-    }))
 })
 
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => (route.meta?.title as string) || '')
 const avatarText = computed(() => (userStore.userInfo?.nickname || '用').slice(0, 1))
+
+/** 菜单点击：抽屉项打开右侧抽屉，其余路由跳转 */
+const handleMenuSelect = (index: string) => {
+  if (index.startsWith('drawer:')) {
+    dailySanityVisible.value = true
+    return
+  }
+  router.push(index)
+}
 
 const handleCommand = async (command: string) => {
   if (command === 'logout') {
