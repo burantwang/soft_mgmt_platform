@@ -39,4 +39,7 @@ public class FailCaseUpdateDTO {
     /** AI辅助分析描述（AI 生成，原因分析、修改建议等） */
     @Size(max = 10000, message = "AI分析描述不能超过10000字")
     private String aiAnalysis;
+
+    /** AI分析是否正确:1是 0否 */
+    private Integer aiAnalysisCorrect;
 }

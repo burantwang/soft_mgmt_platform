@@ -318,7 +318,9 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         if (task == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
         }
-        checkOperatePermission(task);
+        // handleCase 会在后续自动将未指派用例指派给当前用户，权限校验时若用例未指派则视当前用户为有效被指派人
+        Long effectiveAssigneeId = c.getAssigneeId() != null ? c.getAssigneeId() : currentUserId();
+        checkOperatePermission(task, effectiveAssigneeId);
         FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
         if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
@@ -505,15 +507,19 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         if (task == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
         }
-        checkOperatePermission(task);
+        // 权限校验使用合并后的 assigneeId：用户可能正在同时指派给自己并编辑其他字段
+        Long effectiveAssigneeId = dto.getAssigneeId() != null ? dto.getAssigneeId() : c.getAssigneeId();
+        checkOperatePermission(task, effectiveAssigneeId);
         FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
         if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
         }
 
         // 前置条件校验：仅普通用户遵循，管理员（超管/普通管理员）豁免
+        // 使用合并后的 assigneeId 判断：用户可能正在同时指派并编辑其他字段
+        Long guardAssigneeId = dto.getAssigneeId() != null ? dto.getAssigneeId() : c.getAssigneeId();
         if (!isAdmin()) {
-            if (c.getAssigneeId() == null) {
+            if (guardAssigneeId == null) {
                 // 未指派责任人：仅允许指派责任人，其余栏位禁止修改
                 if (dto.getAssigneeId() == null) {
                     throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再编辑");
@@ -524,19 +530,20 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
                         || StringUtils.hasText(dto.getConclusion())
                         || dto.getIsBug() != null
                         || StringUtils.hasText(dto.getAiAnalysis())
+                        || dto.getAiAnalysisCorrect() != null
                         || (dto.getStatus() != null && !dto.getStatus().equals(c.getStatus()));
                 if (touchOther) {
                     throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再填写其他信息");
                 }
             } else {
-                // 已指派责任人：状态变更需失败原因、结论进展、AI分析描述均已填写
+                // 已指派责任人：状态变更需失败原因、结论进展、AI分析判断均已填写
                 Integer targetStatus = dto.getStatus();
                 if (targetStatus != null && !targetStatus.equals(c.getStatus())) {
                     String reason = StringUtils.hasText(dto.getFailReason()) ? dto.getFailReason() : c.getFailReason();
                     String progress = StringUtils.hasText(dto.getProgress()) ? dto.getProgress() : c.getProgress();
-                    String analysis = StringUtils.hasText(dto.getAiAnalysis()) ? dto.getAiAnalysis() : c.getAiAnalysis();
-                    if (!StringUtils.hasText(reason) || !StringUtils.hasText(progress) || !StringUtils.hasText(analysis)) {
-                        throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请填写失败原因、结论进展、AI分析描述后再更新状态");
+                    Integer aiCorrect = dto.getAiAnalysisCorrect() != null ? dto.getAiAnalysisCorrect() : c.getAiAnalysisCorrect();
+                    if (!StringUtils.hasText(reason) || !StringUtils.hasText(progress) || aiCorrect == null) {
+                        throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请填写失败原因、结论进展、AI分析判断后再更新状态");
                     }
                 }
             }
@@ -568,6 +575,9 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         c.setConclusion(dto.getConclusion());
         if (dto.getAiAnalysis() != null) {
             c.setAiAnalysis(dto.getAiAnalysis());
+        }
+        if (dto.getAiAnalysisCorrect() != null) {
+            c.setAiAnalysisCorrect(dto.getAiAnalysisCorrect());
         }
         caseMapper.updateById(c);
 
@@ -776,16 +786,25 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
     }
 
     /**
-     * 操作权限：仅任务创建人、被指派人或超管可流转/处理
+     * 操作权限：仅任务创建人、任务被指派人、用例被指派人或超管可流转/处理
      */
     protected void checkOperatePermission(ReleaseFailTask task) {
+        checkOperatePermission(task, null);
+    }
+
+    /**
+     * 操作权限（含用例级被指派人校验）：DailySanity 场景下用例可单独指派，
+     * 任务级 assigneeId 可能为 null，需额外校验用例级 assigneeId。
+     */
+    protected void checkOperatePermission(ReleaseFailTask task, Long caseAssigneeId) {
         long current = currentUserId();
         if (isSuperAdmin()) {
             return;
         }
         boolean isCreator = task.getCreatorId() != null && task.getCreatorId().equals(current);
-        boolean isAssignee = task.getAssigneeId() != null && task.getAssigneeId().equals(current);
-        if (!isCreator && !isAssignee) {
+        boolean isTaskAssignee = task.getAssigneeId() != null && task.getAssigneeId().equals(current);
+        boolean isCaseAssignee = caseAssigneeId != null && caseAssigneeId.equals(current);
+        if (!isCreator && !isTaskAssignee && !isCaseAssignee) {
             throw new BusinessException(ErrorCode.NO_PERMISSION, "仅任务创建人或被指派人可操作");
         }
     }

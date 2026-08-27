@@ -42,5 +42,11 @@ public class GroupedFailCaseVO {
 
     private String conclusion;
 
+    /** AI辅助分析描述（原因分析、修改建议等） */
+    private String aiAnalysis;
+
+    /** AI分析是否正确:1是 0否 */
+    private Integer aiAnalysisCorrect;
+
     private LocalDateTime publishTime;
 }

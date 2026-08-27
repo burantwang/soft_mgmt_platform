@@ -162,17 +162,12 @@
             </el-table-column>
             <el-table-column label="AI分析判断" width="110" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'isBug')" placement="top" :disabled="!fieldDisabled(row, 'isBug')">
+                <el-tooltip :content="fieldDisabledTip(row, 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(row, 'aiAnalysisCorrect')">
                   <div>
-                    <el-switch
-                      v-model="editing[row.id].isBug"
-                      :active-value="1"
-                      :inactive-value="0"
-                      active-text="提Bug"
-                      inactive-text="不提"
-                      inline-prompt
-                      :disabled="fieldDisabled(row, 'isBug')"
-                    />
+                    <el-select v-model="editing[row.id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(row, 'aiAnalysisCorrect')" style="width: 70px">
+                      <el-option label="Y" :value="1" />
+                      <el-option label="N" :value="0" />
+                    </el-select>
                   </div>
                 </el-tooltip>
               </template>
@@ -278,17 +273,17 @@ function hasAssignee(row: GroupedFailCase): boolean {
   return aid != null && aid !== 0
 }
 
-/** 状态栏位前置条件：失败原因、结论进展、AI分析描述均已填写（AI分析描述为只读，取服务端值） */
+/** 状态栏位前置条件：失败原因、结论进展、AI分析判断(Y/N)均已填写 */
 function statusReady(row: GroupedFailCase): boolean {
   const f = editing[row.id]
   if (!f) return false
   const reason = f.failReason?.trim()
   const progress = f.progress?.trim()
-  const analysis = row.aiAnalysis?.trim()
-  return !!(reason && progress && analysis)
+  const aiOk = f.aiAnalysisCorrect === 1 || f.aiAnalysisCorrect === 0
+  return !!(reason && progress && aiOk)
 }
 
-type GuardField = 'failReason' | 'progress' | 'status' | 'isBug'
+type GuardField = 'failReason' | 'progress' | 'status' | 'aiAnalysisCorrect'
 
 /** 是否禁用指定栏位（普通用户遵循前置条件，管理员豁免） */
 function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
@@ -301,7 +296,7 @@ function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
 function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
   if (isAdmin.value) return ''
   if (!hasAssignee(row)) return '请先指派责任人后再编辑'
-  if (field === 'status') return '请填写失败原因、结论进展、AI分析描述后再更新状态'
+  if (field === 'status') return '请填写失败原因、结论进展、AI分析判断后再更新状态'
   return ''
 }
 
@@ -350,6 +345,7 @@ function toEditingForm(item: GroupedFailCase): FailCaseUpdateForm {
     failReason: item.failReason || '',
     fixPlan: item.fixPlan || '',
     isBug: item.isBug ?? 0,
+    aiAnalysisCorrect: item.aiAnalysisCorrect,
     progress: combined,
     conclusion: combined
   }
