@@ -27,7 +27,7 @@
         <div class="sc-icon task"><el-icon><Warning /></el-icon></div>
         <div class="sc-main">
           <div class="sc-value">{{ summary?.taskTotal ?? '-' }}</div>
-          <div class="sc-label">DailySanity任务</div>
+          <div class="sc-label">Daily_Sanity</div>
         </div>
         <div class="sc-sub">
           <span class="warn">待处理 {{ summary?.taskPending ?? 0 }}</span>
@@ -77,7 +77,7 @@
         </template>
         <div class="entry-grid">
           <div class="entry" @click="router.push('/release')"><el-icon><Promotion /></el-icon><span>版本发布</span></div>
-          <div class="entry" @click="router.push('/task')"><el-icon><Warning /></el-icon><span>DailySanity任务</span></div>
+          <div class="entry" @click="router.push('/task')"><el-icon><Warning /></el-icon><span>Daily_Sanity</span></div>
           <div class="entry" @click="router.push('/wiki')"><el-icon><Reading /></el-icon><span>Wiki 知识库</span></div>
           <div class="entry" @click="router.push('/files')"><el-icon><FolderOpened /></el-icon><span>文件资源</span></div>
           <div class="entry" @click="router.push('/dashboard')"><el-icon><Odometer /></el-icon><span>统计看板</span></div>

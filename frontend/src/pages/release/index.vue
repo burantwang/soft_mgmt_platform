@@ -274,7 +274,7 @@
         </el-descriptions>
         <el-alert
           v-if="detail.failTaskId"
-          title="该发布存在失败用例，已自动生成失败聚合任务，可在「DailySanity任务」中查看处理。"
+          title="该发布存在失败用例，已自动生成失败聚合任务，可在「Daily_Sanity」中查看处理。"}
           type="warning"
           :closable="false"
           show-icon

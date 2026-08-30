@@ -51,20 +51,20 @@ export const routes: RouteRecordRaw[] = [
             path: '',
             name: 'FailTask',
             component: () => import('@/pages/task/index.vue'),
-            meta: { title: 'DailySanity任务', hidden: true }
+            meta: { title: 'Daily_Sanity', hidden: true }
           },
           {
             // 二级菜单项：以右侧抽屉方式打开
             path: 'daily-sanity',
             name: 'DailySanity',
             component: () => import('@/pages/task/index.vue'),
-            meta: { title: 'DailySanity任务', drawer: true }
+            meta: { title: 'Daily_Sanity', drawer: true }
           },
           {
             path: 'weekly-sanity',
             name: 'WeeklySanity',
             component: () => import('@/pages/task/weekly.vue'),
-            meta: { title: 'WeeklySanity任务', drawer: true }
+            meta: { title: 'Weekly_Sanity', drawer: true }
           },
           {
             path: 'mine',

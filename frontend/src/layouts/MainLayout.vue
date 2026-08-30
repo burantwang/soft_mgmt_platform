@@ -70,13 +70,13 @@
     </el-container>
   </el-container>
 
-  <!-- DailySanity任务：右侧抽屉 -->
-  <el-drawer v-model="dailySanityVisible" title="DailySanity任务" size="85%" destroy-on-close>
+  <!-- Daily_Sanity：右侧抽屉 -->
+  <el-drawer v-model="dailySanityVisible" title="Daily_Sanity" size="85%" destroy-on-close>
     <TaskPage v-if="dailySanityVisible" />
   </el-drawer>
 
-  <!-- WeeklySanity任务：右侧抽屉 -->
-  <el-drawer v-model="weeklySanityVisible" title="WeeklySanity任务" size="85%" destroy-on-close>
+  <!-- Weekly_Sanity：右侧抽屉 -->
+  <el-drawer v-model="weeklySanityVisible" title="Weekly_Sanity" size="85%" destroy-on-close>
     <WeeklyPage v-if="weeklySanityVisible" />
   </el-drawer>
 </template>

@@ -2,7 +2,7 @@
   <div class="fail-task-page">
     <el-card shadow="never" class="mb-16">
       <template #header>
-        <div class="page-title">DailySanity任务</div>
+        <div class="page-title">Daily_Sanity</div>
       </template>
 
       <div class="week-stats">

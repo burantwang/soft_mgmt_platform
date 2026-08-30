@@ -2,7 +2,10 @@
   <div class="weekly-task-page">
     <el-card shadow="never" class="mb-16">
       <template #header>
-        <div class="page-title">WeeklySanity任务</div>
+        <div class="page-header">
+          <div class="page-title">Weekly_Sanity</div>
+          <el-button type="primary" @click="onPickReport">上传测试报告</el-button>
+        </div>
       </template>
 
       <div class="week-stats">
@@ -89,6 +92,48 @@
             </div>
           </template>
 
+          <!-- 模块(HTML)独立统计 -->
+          <div v-if="group.modules && group.modules.length" class="module-stats">
+            <div class="ms-header">
+              <span class="ms-title">模块执行统计</span>
+              <span class="ms-sub">全量测试结果分模块执行，每个 HTML 单独记录统计</span>
+            </div>
+            <el-table :data="group.modules" border size="small" class="module-table">
+              <el-table-column prop="moduleName" label="模块(HTML)" min-width="200" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="module-name">{{ row.moduleName }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="结果" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.result === 1 ? 'success' : 'danger'" size="small">{{ row.resultDesc }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="totalCount" label="用例总数" width="90" align="center" />
+              <el-table-column prop="passedCount" label="通过" width="70" align="center">
+                <template #default="{ row }"><span class="ok-text">{{ row.passedCount }}</span></template>
+              </el-table-column>
+              <el-table-column prop="failedCount" label="失败" width="70" align="center">
+                <template #default="{ row }"><span class="bad-text">{{ row.failedCount }}</span></template>
+              </el-table-column>
+              <el-table-column prop="errorCount" label="错误" width="70" align="center">
+                <template #default="{ row }"><span v-if="row.errorCount > 0" class="bad-text">{{ row.errorCount }}</span><span v-else class="text-muted">0</span></template>
+              </el-table-column>
+              <el-table-column prop="skippedCount" label="跳过" width="70" align="center" />
+              <el-table-column label="通过率" width="90" align="center">
+                <template #default="{ row }">
+                  <span :class="row.passRate >= 100 ? 'ok-text' : 'warn-text'">{{ row.passRate }}%</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="报告" width="90" align="center">
+                <template #default="{ row }">
+                  <el-button v-if="row.reportFileId" link type="primary" @click="openModuleReport(row.reportFileId)">查看</el-button>
+                  <span v-else class="text-muted">-</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
           <div class="group-filter">
             <label>责任人</label>
             <el-select
@@ -141,7 +186,7 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="失败脚本" min-width="220" show-overflow-tooltip>
+            <el-table-column label="模块 / 失败脚本" min-width="240" show-overflow-tooltip>
               <template #default="{ row }">
                 <div class="case-name">
                   <el-tag size="small" :type="row.caseType === 'error' ? 'danger' : 'warning'">{{ row.caseTypeDesc }}</el-tag>
@@ -151,32 +196,32 @@
             </el-table-column>
             <el-table-column label="失败原因" min-width="200">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'failReason')" placement="top" :disabled="!fieldDisabled(row, 'failReason')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
                   <div>
-                    <el-input v-model="editing[row.id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(row, 'failReason')" />
+                    <el-input v-model="editing[toCase(row).id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(toCase(row), 'failReason')" />
                   </div>
                 </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="结论进展" min-width="200">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'progress')" placement="top" :disabled="!fieldDisabled(row, 'progress')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
                   <div>
-                    <el-input v-model="editing[row.id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(row, 'progress')" />
+                    <el-input v-model="editing[toCase(row).id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(toCase(row), 'progress')" />
                   </div>
                 </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="责任人" width="140" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="assignDisabled(row) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(row)">
+                <el-tooltip :content="assignDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(toCase(row))">
                   <el-select
-                    v-model="editing[row.id].assigneeId"
+                    v-model="editing[toCase(row).id].assigneeId"
                     placeholder="选择"
                     clearable
-                    :disabled="assignDisabled(row)"
-                    :loading="saving[row.id]"
-                    @change="quickAssign(row, $event)"
+                    :disabled="assignDisabled(toCase(row))"
+                    :loading="saving[toCase(row).id]"
+                    @change="quickAssign(toCase(row), $event)"
                   >
                     <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname || u.username" :value="u.id" />
                   </el-select>
@@ -185,12 +230,12 @@
             </el-table-column>
             <el-table-column label="状态" width="120" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'status')" placement="top" :disabled="!fieldDisabled(row, 'status')">
-                  <div :class="['status-cell', statusClass(editing[row.id].status)]">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'status')" placement="top" :disabled="!fieldDisabled(toCase(row), 'status')">
+                  <div :class="['status-cell', statusClass(editing[(toCase(row)).id].status)]">
                     <el-select
-                      v-model="editing[row.id].status"
+                      v-model="editing[(toCase(row)).id].status"
                       placeholder="状态"
-                      :disabled="fieldDisabled(row, 'status')"
+                      :disabled="fieldDisabled(toCase(row), 'status')"
                       class="status-select"
                     >
                       <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
@@ -211,9 +256,9 @@
             </el-table-column>
             <el-table-column label="AI分析判断" width="110" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(row, 'aiAnalysisCorrect')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(toCase(row), 'aiAnalysisCorrect')">
                   <div>
-                    <el-select v-model="editing[row.id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(row, 'aiAnalysisCorrect')" style="width: 70px">
+                    <el-select v-model="editing[toCase(row).id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(toCase(row), 'aiAnalysisCorrect')" style="width: 70px">
                       <el-option label="Y" :value="1" />
                       <el-option label="N" :value="0" />
                     </el-select>
@@ -223,9 +268,9 @@
             </el-table-column>
             <el-table-column label="操作" width="90" align="center" fixed="right">
               <template #default="{ row }">
-                <el-tooltip :content="saveDisabledTip(row)" placement="top" :disabled="!saveDisabled(row)">
+                <el-tooltip :content="saveDisabledTip(toCase(row))" placement="top" :disabled="!saveDisabled(toCase(row))">
                   <div>
-                    <el-button type="primary" size="small" :loading="saving[row.id]" :disabled="saveDisabled(row)" @click="saveCase(row)">保存</el-button>
+                    <el-button type="primary" size="small" :loading="saving[toCase(row).id]" :disabled="saveDisabled(toCase(row))" @click="saveCase(toCase(row))">保存</el-button>
                   </div>
                 </el-tooltip>
               </template>
@@ -234,14 +279,99 @@
         </el-collapse-item>
       </el-collapse>
     </el-card>
+
+    <!-- 隐藏的多文件选择框 -->
+    <input ref="fileInputRef" type="file" accept=".html,.htm" multiple style="display: none" @change="onFileChange" />
+
+    <!-- 上传预览弹窗 -->
+    <el-dialog v-model="previewVisible" title="报告解析预览" width="880px" destroy-on-close>
+      <div v-loading="previewLoading" class="preview-body">
+        <el-alert
+          :type="previewAlertType"
+          :title="previewAlertText"
+          :closable="false"
+          show-icon
+          class="mb-16"
+        />
+        <el-table :data="previewItems" border size="small" max-height="240" class="mb-16">
+          <el-table-column type="index" width="50" />
+          <el-table-column prop="fileName" label="模块(HTML)" min-width="180" show-overflow-tooltip />
+          <el-table-column label="结果" width="70" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.result === 1 ? 'success' : 'danger'" size="small">{{ row.resultDesc }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="totalCount" label="用例" width="70" align="center" />
+          <el-table-column prop="passedCount" label="通过" width="60" align="center" />
+          <el-table-column prop="failedCount" label="失败" width="60" align="center" />
+          <el-table-column prop="errorCount" label="错误" width="60" align="center" />
+          <el-table-column prop="skippedCount" label="跳过" width="60" align="center" />
+          <el-table-column prop="version" label="版本" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.version || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="失败用例" width="80" align="center">
+            <template #default="{ row }">
+              <span :class="row.failCases?.length ? 'bad-text' : ''">{{ row.failCases?.length || 0 }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-form ref="confirmFormRef" :model="confirmForm" :rules="confirmRules" label-width="90px">
+          <el-form-item label="代码分支" prop="branch">
+            <el-input v-model="confirmForm.branch" placeholder="如 master / release/v1.2" />
+          </el-form-item>
+          <el-form-item label="镜像版本" prop="version">
+            <el-input v-model="confirmForm.version" placeholder="留空使用报告内 Environment.Version" />
+          </el-form-item>
+          <el-form-item label="关联机型" prop="projectIds">
+            <el-select v-model="confirmForm.projectIds" multiple placeholder="选择机型（每个模块×机型单独记录）" style="width: 100%">
+              <el-option v-for="p in projects" :key="p.id" :label="p.projectName" :value="p.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="confirmForm.remark" type="textarea" :rows="2" placeholder="备注（可选）" />
+          </el-form-item>
+        </el-form>
+
+        <template v-if="totalFailCases.length">
+          <el-divider content-position="left">失败/错误用例明细（{{ totalFailCases.length }} 条）</el-divider>
+          <el-table :data="totalFailCases" border size="small" max-height="220">
+            <el-table-column prop="module" label="所属模块" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="name" label="用例名称" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="log" label="运行日志" min-width="300" show-overflow-tooltip />
+          </el-table>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="previewVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="confirmReport">确认入库</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { assignFailCaseApi, getEnabledUsersApi, getGroupedFailCasesApi, getRecentWeekStatsApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
-import type { FailCaseGrouped, GroupedFailCase, RecentDayStat, UserOption, FailCaseUpdateForm } from '@/types/release'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import {
+  assignWeeklyFailCaseApi,
+  confirmWeeklyReportApi,
+  getWeeklyEnabledUsersApi,
+  getWeeklyGroupedCasesApi,
+  getWeeklyRecentWeekStatsApi,
+  getWeeklyReportContentApi,
+  previewWeeklyReportApi,
+  updateWeeklyFailCaseApi
+} from '@/api/weekly'
+import { getProjectEnabledApi } from '@/api/release'
+import type {
+  WeeklyFailCase,
+  WeeklyFailCaseGrouped,
+  WeeklyFailCaseUpdateForm,
+  WeeklyRecentDayStat,
+  WeeklyReportPreviewVO
+} from '@/types/weekly'
+import type { ReleaseProject, UserOption } from '@/types/release'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
@@ -253,10 +383,10 @@ const isAdmin = computed(() => {
 })
 
 const loading = ref(false)
-const groups = ref<FailCaseGrouped[]>([])
+const groups = ref<WeeklyFailCaseGrouped[]>([])
 const activeNames = ref<string[]>([])
 const userOptions = ref<UserOption[]>([])
-const weekStats = ref<RecentDayStat[]>([])
+const weekStats = ref<WeeklyRecentDayStat[]>([])
 const saving = reactive<Record<number, boolean>>({})
 
 const search = reactive({
@@ -273,7 +403,7 @@ const statusOptions = [
   { value: 4, label: '非缺陷' }
 ]
 
-const editing = reactive<Record<number, FailCaseUpdateForm>>({})
+const editing = reactive<Record<number, WeeklyFailCaseUpdateForm>>({})
 
 // 每个分组（分支×机型）的按责任人筛选：value 为 undefined 表示全部，0 表示未指派
 const assigneeFilter = reactive<Record<string, number | undefined>>({})
@@ -289,20 +419,25 @@ const statusFilterOptions = [
   { value: 4, label: '非缺陷' }
 ]
 
+/** 将 el-table 插槽的 DefaultRow 转换为强类型用例对象 */
+function toCase(row: any): WeeklyFailCase {
+  return row as WeeklyFailCase
+}
+
 // 每个分组当前选中的原始报告文件ID（仅用于展示选中项）
 const reportSel = reactive<Record<string, number | undefined>>({})
 
-function groupKey(group: FailCaseGrouped) {
+function groupKey(group: WeeklyFailCaseGrouped) {
   return `${group.branch}@@${group.projectName}`
 }
 
-function resetGroupFilter(group: FailCaseGrouped) {
+function resetGroupFilter(group: WeeklyFailCaseGrouped) {
   const key = groupKey(group)
   assigneeFilter[key] = undefined
   statusFilter[key] = undefined
 }
 
-function visibleCases(group: FailCaseGrouped): GroupedFailCase[] {
+function visibleCases(group: WeeklyFailCaseGrouped): WeeklyFailCase[] {
   const key = groupKey(group)
   const af = assigneeFilter[key]
   const sf = statusFilter[key]
@@ -318,23 +453,23 @@ function visibleCases(group: FailCaseGrouped): GroupedFailCase[] {
 }
 
 /** 当前行责任人是当前登录用户 */
-function isMyCase(row: GroupedFailCase): boolean {
+function isMyCase(row: WeeklyFailCase): boolean {
   return row.assigneeId != null && row.assigneeId === userStore.userInfo?.id
 }
 
 /** 普通用户是否有权操作该行（责任人是自己；管理员不受限） */
-function canOperate(row: GroupedFailCase): boolean {
+function canOperate(row: WeeklyFailCase): boolean {
   return isAdmin.value || isMyCase(row)
 }
 
 /** 责任人下拉是否禁用：普通用户不能操作他人责任行 */
-function assignDisabled(row: GroupedFailCase): boolean {
+function assignDisabled(row: WeeklyFailCase): boolean {
   if (isAdmin.value) return false
   return row.assigneeId != null && row.assigneeId !== userStore.userInfo?.id
 }
 
 /** 状态栏位前置条件：失败原因、结论进展、AI分析判断(Y/N)均已填写 */
-function statusReady(row: GroupedFailCase): boolean {
+function statusReady(row: WeeklyFailCase): boolean {
   const f = editing[row.id]
   if (!f) return false
   const reason = f.failReason?.trim()
@@ -346,14 +481,14 @@ function statusReady(row: GroupedFailCase): boolean {
 type GuardField = 'failReason' | 'progress' | 'status' | 'aiAnalysisCorrect'
 
 /** 是否禁用指定栏位（普通用户仅可编辑责任人是自己的行，管理员豁免） */
-function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
+function fieldDisabled(row: WeeklyFailCase, field: GuardField): boolean {
   if (isAdmin.value) return false
   if (!canOperate(row)) return true
   if (field === 'status') return !statusReady(row)
   return false
 }
 
-function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
+function fieldDisabledTip(row: WeeklyFailCase, field: GuardField): string {
   if (isAdmin.value) return ''
   if (!canOperate(row)) return '仅责任人为自己的问题单可操作'
   if (field === 'status') return '请完成所有信息后再更新'
@@ -361,11 +496,11 @@ function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
 }
 
 /** 保存按钮：普通用户仅责任人是自己的行可保存 */
-function saveDisabled(row: GroupedFailCase): boolean {
+function saveDisabled(row: WeeklyFailCase): boolean {
   return !isAdmin.value && !canOperate(row)
 }
 
-function saveDisabledTip(row: GroupedFailCase): string {
+function saveDisabledTip(row: WeeklyFailCase): string {
   return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
 }
 
@@ -377,7 +512,7 @@ function statusClass(status: number | undefined): string {
 }
 
 /** 分组状态统计：待处理/处理中/已修复(含非缺陷)/分析完成率 */
-function groupStatusStats(group: FailCaseGrouped) {
+function groupStatusStats(group: WeeklyFailCaseGrouped) {
   const cases = group.cases
   const pending = cases.filter((c) => c.status === 1).length
   const processing = cases.filter((c) => c.status === 2).length
@@ -388,10 +523,10 @@ function groupStatusStats(group: FailCaseGrouped) {
 }
 
 /** 打开该分组的原始 HTML 测试报告（新窗口） */
-async function openReport(group: FailCaseGrouped, fileId?: number) {
+async function openReport(group: WeeklyFailCaseGrouped, fileId?: number) {
   if (!fileId) return
   try {
-    const blob = await getReportContentApi(fileId)
+    const blob = await getWeeklyReportContentApi(fileId)
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
     // 新窗口加载后释放 Blob URL，避免内存占用
@@ -401,7 +536,19 @@ async function openReport(group: FailCaseGrouped, fileId?: number) {
   }
 }
 
-function toEditingForm(item: GroupedFailCase): FailCaseUpdateForm {
+/** 打开模块的原始 HTML 报告（新窗口） */
+async function openModuleReport(fileId: number) {
+  try {
+    const blob = await getWeeklyReportContentApi(fileId)
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch {
+    // 错误提示已在请求拦截器统一处理
+  }
+}
+
+function toEditingForm(item: WeeklyFailCase): WeeklyFailCaseUpdateForm {
   // 分析进展与结论合并为一列：初始化时拼接两字段历史内容，保存时同步写入两个字段
   const combined = [item.progress, item.conclusion]
     .filter((s) => s && s.trim())
@@ -420,7 +567,7 @@ function toEditingForm(item: GroupedFailCase): FailCaseUpdateForm {
 
 async function loadUsers() {
   try {
-    const res = await getEnabledUsersApi()
+    const res = await getWeeklyEnabledUsersApi()
     userOptions.value = res.data || []
   } catch (e) {
     // ignore
@@ -429,7 +576,7 @@ async function loadUsers() {
 
 async function loadWeekStats() {
   try {
-    const res = await getRecentWeekStatsApi()
+    const res = await getWeeklyRecentWeekStatsApi()
     weekStats.value = res.data || []
   } catch (e) {
     // ignore
@@ -458,30 +605,30 @@ function formatDayLabel(dateStr: string): string {
 }
 
 /** 无执行明细时展示 None */
-function rateText(day: RecentDayStat): string {
+function rateText(day: WeeklyRecentDayStat): string {
   if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return 'None'
   return `${day.rate}%`
 }
 
 /** 完成率样式：100%绿 / 未完成橙 / 无数据灰 */
-function rateClass(day: RecentDayStat): string {
+function rateClass(day: WeeklyRecentDayStat): string {
   if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return 'none'
   return day.rate >= 100 ? 'ok' : 'warn'
 }
 
-function barWidth(day: RecentDayStat): string {
+function barWidth(day: WeeklyRecentDayStat): string {
   if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return '0%'
   return `${day.rate}%`
 }
 
-function pendingCount(day: RecentDayStat): number {
+function pendingCount(day: WeeklyRecentDayStat): number {
   return Math.max(day.totalCount - day.analyzedCount, 0)
 }
 
 async function loadData() {
   loading.value = true
   try {
-    const res = await getGroupedFailCasesApi({
+    const res = await getWeeklyGroupedCasesApi({
       date: search.date,
       branch: search.branch || undefined,
       projectName: search.projectName || undefined,
@@ -511,7 +658,7 @@ function resetSearch() {
 }
 
 /** 快速指派责任人：下拉选择即保存生效，无需点击保存按钮 */
-async function quickAssign(row: GroupedFailCase, val: number | string | undefined) {
+async function quickAssign(row: WeeklyFailCase, val: number | string | undefined) {
   const assigneeId = val == null || val === '' ? null : Number(val)
   if (assigneeId === row.assigneeId) return
   // 普通用户预校验：未指派仅可认领给自己；不能取消指派（管理员不受限）
@@ -529,8 +676,8 @@ async function quickAssign(row: GroupedFailCase, val: number | string | undefine
   }
   saving[row.id] = true
   try {
-    await assignFailCaseApi(row.id, assigneeId)
-    row.assigneeId = assigneeId
+    await assignWeeklyFailCaseApi(row.id, assigneeId)
+    row.assigneeId = assigneeId ?? undefined
     ElMessage.success(assigneeId == null ? '已取消指派' : '指派成功')
   } catch {
     // 接口失败时回滚下拉显示值，错误信息由拦截器统一提示
@@ -540,16 +687,116 @@ async function quickAssign(row: GroupedFailCase, val: number | string | undefine
   }
 }
 
-async function saveCase(row: any) {
-  const item = row as GroupedFailCase
-  const form = editing[item.id]
-  saving[item.id] = true
+async function saveCase(row: WeeklyFailCase) {
+  const form = editing[row.id]
+  saving[row.id] = true
   try {
-    await updateFailCaseApi(item.id, form)
+    await updateWeeklyFailCaseApi(row.id, form)
     ElMessage.success('保存成功')
     await loadData()
   } finally {
-    saving[item.id] = false
+    saving[row.id] = false
+  }
+}
+
+/* ==================== 上传测试报告 ==================== */
+
+const fileInputRef = ref<HTMLInputElement>()
+const previewVisible = ref(false)
+const previewLoading = ref(false)
+const submitting = ref(false)
+const previewData = ref<WeeklyReportPreviewVO | null>(null)
+const projects = ref<ReleaseProject[]>([])
+
+const previewItems = computed(() => previewData.value?.items || [])
+
+/** 合并所有模块的失败用例（预览展示） */
+const totalFailCases = computed(() => {
+  return previewItems.value.flatMap((item) =>
+    (item.failCases || []).map((fc) => ({
+      module: item.fileName,
+      name: fc.name,
+      log: fc.log
+    }))
+  )
+})
+
+const previewAlertType = computed(() => {
+  const failed = previewItems.value.filter((i) => i.result === 2).length
+  return failed > 0 ? 'error' : 'success'
+})
+
+const previewAlertText = computed(() => {
+  const items = previewItems.value
+  const failed = items.filter((i) => i.result === 2).length
+  const total = totalFailCases.value.length
+  return `共 ${items.length} 个模块，失败模块 ${failed} 个` + (total ? `，失败/错误用例 ${total} 条` : '')
+})
+
+const confirmFormRef = ref<FormInstance>()
+const confirmForm = reactive({
+  previewToken: '',
+  branch: '',
+  version: '',
+  projectIds: [] as number[],
+  remark: ''
+})
+const confirmRules: FormRules = {
+  branch: [{ required: true, message: '请输入代码分支', trigger: 'blur' }],
+  projectIds: [{ required: true, type: 'array', min: 1, message: '请至少选择一个机型', trigger: 'change' }]
+}
+
+function onPickReport() {
+  fileInputRef.value?.click()
+}
+
+async function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  if (!files.length) return
+  previewLoading.value = true
+  try {
+    const res = await previewWeeklyReportApi(files)
+    previewData.value = res.data || null
+    confirmForm.previewToken = previewData.value?.previewToken || ''
+    confirmForm.branch = ''
+    confirmForm.version = ''
+    confirmForm.projectIds = []
+    confirmForm.remark = ''
+    previewVisible.value = true
+  } catch {
+    // 错误提示已在请求拦截器统一处理
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function confirmReport() {
+  try {
+    await confirmFormRef.value?.validate()
+  } catch {
+    return
+  }
+  submitting.value = true
+  try {
+    await confirmWeeklyReportApi({ ...confirmForm })
+    ElMessage.success('确认入库成功')
+    previewVisible.value = false
+    await Promise.all([loadData(), loadWeekStats()])
+  } catch {
+    // 错误提示已在请求拦截器统一处理
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function loadProjects() {
+  try {
+    const res = await getProjectEnabledApi()
+    projects.value = res.data || []
+  } catch (e) {
+    // ignore
   }
 }
 
@@ -565,12 +812,19 @@ onMounted(async () => {
   loadUsers()
   loadWeekStats()
   loadData()
+  loadProjects()
 })
 </script>
 
 <style scoped>
 .weekly-task-page {
   padding: 16px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .page-title {
@@ -853,6 +1107,48 @@ onMounted(async () => {
   color: #d97706;
 }
 
+/* 模块(HTML)独立统计 */
+.module-stats {
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  margin: 0 8px 12px;
+  padding: 10px 12px;
+  background: #fafbfd;
+}
+
+.ms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ms-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.ms-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #10b981, #34d399);
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.ms-sub {
+  font-size: 12px;
+  color: #a8abb2;
+}
+
+.module-name {
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+
 .group-filter {
   display: flex;
   align-items: center;
@@ -923,6 +1219,18 @@ onMounted(async () => {
   color: #909399;
 }
 
+.ok-text {
+  color: #16a34a;
+}
+
+.bad-text {
+  color: #dc2626;
+}
+
+.warn-text {
+  color: #d97706;
+}
+
 .ai-cell {
   max-height: 44px;
   overflow: hidden;
@@ -949,6 +1257,12 @@ onMounted(async () => {
 .status-cell.status-fixed .status-select :deep(.el-select__wrapper) {
   background-color: #e8f5e9 !important;
   box-shadow: 0 0 0 1px #4caf50 inset !important;
+}
+
+.preview-body {
+  max-height: 70vh;
+  overflow: auto;
+  padding-right: 4px;
 }
 </style>
 
