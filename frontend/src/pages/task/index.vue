@@ -38,19 +38,23 @@
         <el-collapse-item v-for="group in groups" :key="groupKey(group)" :name="groupKey(group)">
           <template #title>
             <div class="group-title">
-              <span class="group-name">【{{ group.branch }} - {{ group.projectName }}】执行明细</span>
-              <span class="group-stat">
-                用例总数：<b>{{ group.totalCount }}</b>
-                成功：<b class="ok">{{ group.passedCount }}</b>
-                失败：<b class="bad">{{ group.failedCount }}</b>
-                通过率：<b :class="group.passRate >= 100 ? 'ok' : 'warn'">{{ group.passRate }}%</b>
-              </span>
-              <span class="status-stat">
-                待处理：<b>{{ groupStatusStats(group).pending }}</b>
-                处理中：<b>{{ groupStatusStats(group).processing }}</b>
-                已修复：<b class="ok">{{ groupStatusStats(group).fixed }}</b>
-                分析完成率：<b :class="groupStatusStats(group).rate >= 100 ? 'ok' : 'warn'">{{ groupStatusStats(group).rate }}%</b>
-              </span>
+              <div class="group-title-left">
+                <span class="group-name">【{{ group.branch }} - {{ group.projectName }}】执行明细</span>
+                <span class="group-stat">
+                  用例总数：<b>{{ group.totalCount }}</b>
+                  成功：<b class="ok">{{ group.passedCount }}</b>
+                  失败：<b class="bad">{{ group.failedCount }}</b>
+                  通过率：<b :class="group.passRate >= 100 ? 'ok' : 'warn'">{{ group.passRate }}%</b>
+                </span>
+              </div>
+              <div class="group-title-right">
+                <span class="status-stat">
+                  待处理：<b>{{ groupStatusStats(group).pending }}</b>
+                  处理中：<b>{{ groupStatusStats(group).processing }}</b>
+                  已修复：<b class="ok">{{ groupStatusStats(group).fixed }}</b>
+                  分析完成率：<b :class="groupStatusStats(group).rate >= 100 ? 'ok' : 'warn'">{{ groupStatusStats(group).rate }}%</b>
+                </span>
+              </div>
             </div>
           </template>
 
@@ -296,7 +300,7 @@ function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
 function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
   if (isAdmin.value) return ''
   if (!hasAssignee(row)) return '请先指派责任人后再编辑'
-  if (field === 'status') return '请填写失败原因、结论进展、AI分析判断后再更新状态'
+  if (field === 'status') return '请完成所有信息后再更新'
   return ''
 }
 
@@ -473,6 +477,20 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+.group-title-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  flex: 1;
+}
+
+.group-title-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 .group-name {
   font-weight: 600;
   color: #303133;
@@ -500,11 +518,14 @@ onMounted(async () => {
 }
 
 .status-stat {
-  color: #606266;
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 2px 8px;
+  color: #4a5568;
+  background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 50%, #e0e7ff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  padding: 4px 16px;
+  font-size: 13px;
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.12);
+  white-space: nowrap;
 }
 
 .status-stat b {
