@@ -8,6 +8,7 @@ import com.company.devplatform.common.ErrorCode;
 import com.company.devplatform.common.exception.BusinessException;
 import com.company.devplatform.module.auth.entity.SysUser;
 import com.company.devplatform.module.auth.mapper.SysUserMapper;
+import com.company.devplatform.module.release.dto.FailCaseAssignDTO;
 import com.company.devplatform.module.release.dto.FailCaseGroupedQuery;
 import com.company.devplatform.module.release.dto.FailCaseHandleDTO;
 import com.company.devplatform.module.release.dto.FailCaseUpdateDTO;
@@ -322,7 +323,7 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         }
         // handleCase 会在后续自动将未指派用例指派给当前用户，权限校验时若用例未指派则视当前用户为有效被指派人
         Long effectiveAssigneeId = c.getAssigneeId() != null ? c.getAssigneeId() : currentUserId();
-        checkOperatePermission(task, effectiveAssigneeId);
+        checkCasePermission(task, effectiveAssigneeId);
         FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
         if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
@@ -509,22 +510,20 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         if (task == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
         }
-        // 权限校验使用合并后的 assigneeId：用户可能正在同时指派给自己并编辑其他字段
-        Long effectiveAssigneeId = dto.getAssigneeId() != null ? dto.getAssigneeId() : c.getAssigneeId();
-        checkOperatePermission(task, effectiveAssigneeId);
+        // 权限校验（用例级）：管理员（超管/普通管理员）不受限；普通用户仅当责任人是自己时可操作
+        checkCasePermission(task, c.getAssigneeId());
         FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
         if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
         }
 
         // 前置条件校验：仅普通用户遵循，管理员（超管/普通管理员）豁免
-        // 使用合并后的 assigneeId 判断：用户可能正在同时指派并编辑其他字段
-        Long guardAssigneeId = dto.getAssigneeId() != null ? dto.getAssigneeId() : c.getAssigneeId();
         if (!isAdmin()) {
-            if (guardAssigneeId == null) {
-                // 未指派责任人：仅允许指派责任人，其余栏位禁止修改
-                if (dto.getAssigneeId() == null) {
-                    throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再编辑");
+            long current = currentUserId();
+            if (c.getAssigneeId() == null) {
+                // 未指派责任人：仅允许指派给自己（认领），其余栏位禁止修改
+                if (dto.getAssigneeId() == null || !dto.getAssigneeId().equals(current)) {
+                    throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先将责任人指派给自己后再编辑");
                 }
                 boolean touchOther = StringUtils.hasText(dto.getFailReason())
                         || StringUtils.hasText(dto.getFixPlan())
@@ -537,8 +536,11 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
                 if (touchOther) {
                     throw new BusinessException(ErrorCode.BUSINESS_ERROR, "请先指派责任人后再填写其他信息");
                 }
+            } else if (!c.getAssigneeId().equals(current)) {
+                // 责任人是他人：禁止操作
+                throw new BusinessException(ErrorCode.NO_PERMISSION, "仅责任人为自己的问题单可操作");
             } else {
-                // 已指派责任人：状态变更需失败原因、结论进展、AI分析判断均已填写
+                // 责任人是自己：状态变更需失败原因、结论进展、AI分析判断均已填写
                 Integer targetStatus = dto.getStatus();
                 if (targetStatus != null && !targetStatus.equals(c.getStatus())) {
                     String reason = StringUtils.hasText(dto.getFailReason()) ? dto.getFailReason() : c.getFailReason();
@@ -585,6 +587,48 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
 
         refreshTaskStatus(task.getId());
         log.info("[失败任务] 更新用例 taskNo={} caseId={} status={}", task.getTaskNo(), c.getId(), dto.getStatus());
+    }
+
+    @Override
+    public void assignCaseAssignee(Long caseId, FailCaseAssignDTO dto) {
+        ReleaseFailCase c = caseMapper.selectById(caseId);
+        if (c == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用例明细不存在");
+        }
+        ReleaseFailTask task = taskMapper.selectById(c.getTaskId());
+        if (task == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属失败任务不存在");
+        }
+        Long assigneeId = dto.getAssigneeId();
+        // 权限校验（用例级）：管理员（超管/普通管理员）不受限；普通用户仅当责任人是自己时可操作
+        checkCasePermission(task, c.getAssigneeId());
+        FailTaskStatus taskStatus = FailTaskStatus.of(task.getStatus());
+        if (taskStatus == FailTaskStatus.COMPLETED || taskStatus == FailTaskStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "任务已结束，不能处理用例");
+        }
+        // 普通用户指派规则：未指派仅可认领给自己；已指派仅当前被指派人可转派给他人，不能取消；管理员（超管/普通管理员）豁免
+        if (!isAdmin()) {
+            long current = currentUserId();
+            if (c.getAssigneeId() == null) {
+                // 未指派：仅允许认领给自己
+                if (assigneeId == null || !assigneeId.equals(current)) {
+                    throw new BusinessException(ErrorCode.NO_PERMISSION, "未指派用例仅可认领给自己");
+                }
+            } else {
+                // 已指派：仅当前被指派人可转派，且不能取消指派
+                if (!c.getAssigneeId().equals(current)) {
+                    throw new BusinessException(ErrorCode.NO_PERMISSION, "仅责任人为自己的问题单可操作");
+                }
+                if (assigneeId == null) {
+                    throw new BusinessException(ErrorCode.NO_PERMISSION, "无权取消指派，请转派给其他责任人");
+                }
+            }
+        }
+
+        c.setAssigneeId(assigneeId);
+        caseMapper.updateById(c);
+        refreshTaskStatus(task.getId());
+        log.info("[失败任务] 快速指派责任人 taskNo={} caseId={} assigneeId={}", task.getTaskNo(), c.getId(), assigneeId);
     }
 
     @Override
@@ -868,6 +912,20 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         boolean isCaseAssignee = caseAssigneeId != null && caseAssigneeId.equals(current);
         if (!isCreator && !isTaskAssignee && !isCaseAssignee) {
             throw new BusinessException(ErrorCode.NO_PERMISSION, "仅任务创建人或被指派人可操作");
+        }
+    }
+
+    /**
+     * 用例级操作权限：管理员（超管/普通管理员）不受限；
+     * 普通用户仅当用例责任人是自己时可操作（未指派 null 不在此拦截，由调用方按"认领/指派"规则进一步校验）。
+     */
+    protected void checkCasePermission(ReleaseFailTask task, Long caseAssigneeId) {
+        long current = currentUserId();
+        if (isSuperAdmin() || isAdmin()) {
+            return;
+        }
+        if (caseAssigneeId != null && !caseAssigneeId.equals(current)) {
+            throw new BusinessException(ErrorCode.NO_PERMISSION, "仅责任人为自己的问题单可操作");
         }
     }
 

@@ -3,6 +3,7 @@ package com.company.devplatform.module.release.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.company.devplatform.common.Result;
+import com.company.devplatform.module.release.dto.FailCaseAssignDTO;
 import com.company.devplatform.module.release.dto.FailCaseGroupedQuery;
 import com.company.devplatform.module.release.dto.FailCaseHandleDTO;
 import com.company.devplatform.module.release.dto.FailCaseUpdateDTO;
@@ -140,5 +141,13 @@ public class ReleaseFailTaskController {
     @SaCheckPermission("sonic:view")
     public Result<List<RecentDayStatVO>> recentWeekStats() {
         return Result.ok(failTaskService.recentWeekStats());
+    }
+
+    /** 快速指派用例责任人（仅更新 assigneeId，立即生效） */
+    @PutMapping("/fail-cases/{caseId}/assign")
+    @SaCheckPermission("sonic:view")
+    public Result<Void> assignCase(@PathVariable Long caseId, @Valid @RequestBody FailCaseAssignDTO dto) {
+        failTaskService.assignCaseAssignee(caseId, dto);
+        return Result.ok();
     }
 }

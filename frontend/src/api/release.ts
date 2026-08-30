@@ -174,6 +174,11 @@ export function updateFailCaseApi(id: number, data: FailCaseUpdateForm): Promise
   return http.put<null>(`/release/fail-cases/${id}`, data)
 }
 
+/** 快速指派用例责任人（仅更新 assigneeId，立即生效） */
+export function assignFailCaseApi(id: number, assigneeId: number | null): Promise<ApiResult<null>> {
+  return http.put<null>(`/release/fail-cases/${id}/assign`, { assigneeId })
+}
+
 /** 最近7天 DailySanity 分析完成统计 */
 export function getRecentWeekStatsApi(): Promise<ApiResult<RecentDayStat[]>> {
   return http.get<RecentDayStat[]>('/release/fail-cases/recent-week-stats')

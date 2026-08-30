@@ -1,6 +1,7 @@
 package com.company.devplatform.module.release.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.company.devplatform.module.release.dto.FailCaseAssignDTO;
 import com.company.devplatform.module.release.dto.FailCaseGroupedQuery;
 import com.company.devplatform.module.release.dto.FailCaseHandleDTO;
 import com.company.devplatform.module.release.dto.FailCaseUpdateDTO;
@@ -89,4 +90,9 @@ public interface ReleaseFailTaskService {
      * 更新失败用例处理信息
      */
     void updateCase(Long caseId, FailCaseUpdateDTO dto);
+
+    /**
+     * 快速指派用例责任人（仅更新 assigneeId，立即生效）
+     */
+    void assignCaseAssignee(Long caseId, FailCaseAssignDTO dto);
 }

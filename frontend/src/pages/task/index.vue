@@ -169,9 +169,18 @@
             </el-table-column>
             <el-table-column label="责任人" width="140" align="center">
               <template #default="{ row }">
-                <el-select v-model="editing[row.id].assigneeId" placeholder="选择" clearable>
-                  <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname || u.username" :value="u.id" />
-                </el-select>
+                <el-tooltip :content="assignDisabled(row) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(row)">
+                  <el-select
+                    v-model="editing[row.id].assigneeId"
+                    placeholder="选择"
+                    clearable
+                    :disabled="assignDisabled(row)"
+                    :loading="saving[row.id]"
+                    @change="quickAssign(row, $event)"
+                  >
+                    <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname || u.username" :value="u.id" />
+                  </el-select>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="状态" width="120" align="center">
@@ -226,7 +235,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getEnabledUsersApi, getGroupedFailCasesApi, getRecentWeekStatsApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
+import { assignFailCaseApi, getEnabledUsersApi, getGroupedFailCasesApi, getRecentWeekStatsApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
 import type { FailCaseGrouped, GroupedFailCase, RecentDayStat, UserOption, FailCaseUpdateForm } from '@/types/release'
 import { useUserStore } from '@/store/user'
 
@@ -303,10 +312,20 @@ function visibleCases(group: FailCaseGrouped): GroupedFailCase[] {
   })
 }
 
-/** 是否已指派责任人（基于编辑中的值） */
-function hasAssignee(row: GroupedFailCase): boolean {
-  const aid = editing[row.id]?.assigneeId
-  return aid != null && aid !== 0
+/** 当前行责任人是当前登录用户 */
+function isMyCase(row: GroupedFailCase): boolean {
+  return row.assigneeId != null && row.assigneeId === userStore.userInfo?.id
+}
+
+/** 普通用户是否有权操作该行（责任人是自己；管理员不受限） */
+function canOperate(row: GroupedFailCase): boolean {
+  return isAdmin.value || isMyCase(row)
+}
+
+/** 责任人下拉是否禁用：普通用户不能操作他人责任行 */
+function assignDisabled(row: GroupedFailCase): boolean {
+  if (isAdmin.value) return false
+  return row.assigneeId != null && row.assigneeId !== userStore.userInfo?.id
 }
 
 /** 状态栏位前置条件：失败原因、结论进展、AI分析判断(Y/N)均已填写 */
@@ -321,28 +340,28 @@ function statusReady(row: GroupedFailCase): boolean {
 
 type GuardField = 'failReason' | 'progress' | 'status' | 'aiAnalysisCorrect'
 
-/** 是否禁用指定栏位（普通用户遵循前置条件，管理员豁免） */
+/** 是否禁用指定栏位（普通用户仅可编辑责任人是自己的行，管理员豁免） */
 function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
   if (isAdmin.value) return false
-  if (!hasAssignee(row)) return true
+  if (!canOperate(row)) return true
   if (field === 'status') return !statusReady(row)
   return false
 }
 
 function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
   if (isAdmin.value) return ''
-  if (!hasAssignee(row)) return '请先指派责任人后再编辑'
+  if (!canOperate(row)) return '仅责任人为自己的问题单可操作'
   if (field === 'status') return '请完成所有信息后再更新'
   return ''
 }
 
-/** 保存按钮：普通用户未指派责任人时禁止保存 */
+/** 保存按钮：普通用户仅责任人是自己的行可保存 */
 function saveDisabled(row: GroupedFailCase): boolean {
-  return !isAdmin.value && !hasAssignee(row)
+  return !isAdmin.value && !canOperate(row)
 }
 
 function saveDisabledTip(row: GroupedFailCase): string {
-  return saveDisabled(row) ? '请先指派责任人后再保存' : ''
+  return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
 }
 
 /** 分组状态统计：待处理/处理中/已修复(含非缺陷)/分析完成率 */
@@ -477,6 +496,36 @@ function resetSearch() {
   search.projectName = ''
   search.caseName = ''
   loadData()
+}
+
+/** 快速指派责任人：下拉选择即保存生效，无需点击保存按钮 */
+async function quickAssign(row: GroupedFailCase, val: number | string | undefined) {
+  const assigneeId = val == null || val === '' ? null : Number(val)
+  if (assigneeId === row.assigneeId) return
+  // 普通用户预校验：未指派仅可认领给自己；不能取消指派（管理员不受限）
+  if (!isAdmin.value) {
+    if (row.assigneeId == null && assigneeId !== userStore.userInfo?.id) {
+      editing[row.id].assigneeId = row.assigneeId
+      ElMessage.warning('未指派用例仅可认领给自己')
+      return
+    }
+    if (assigneeId == null) {
+      editing[row.id].assigneeId = row.assigneeId
+      ElMessage.warning('不能取消指派，请转派给其他责任人')
+      return
+    }
+  }
+  saving[row.id] = true
+  try {
+    await assignFailCaseApi(row.id, assigneeId)
+    row.assigneeId = assigneeId
+    ElMessage.success(assigneeId == null ? '已取消指派' : '指派成功')
+  } catch {
+    // 接口失败时回滚下拉显示值，错误信息由拦截器统一提示
+    editing[row.id].assigneeId = row.assigneeId
+  } finally {
+    saving[row.id] = false
+  }
 }
 
 async function saveCase(row: any) {
