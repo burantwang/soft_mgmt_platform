@@ -61,6 +61,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: 'DailySanity任务', drawer: true }
           },
           {
+            path: 'weekly-sanity',
+            name: 'WeeklySanity',
+            component: () => import('@/pages/task/weekly.vue'),
+            meta: { title: 'WeeklySanity任务', drawer: true }
+          },
+          {
             path: 'mine',
             name: 'MyTask',
             component: () => import('@/pages/task/mine.vue'),

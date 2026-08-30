@@ -74,6 +74,11 @@
   <el-drawer v-model="dailySanityVisible" title="DailySanity任务" size="85%" destroy-on-close>
     <TaskPage v-if="dailySanityVisible" />
   </el-drawer>
+
+  <!-- WeeklySanity任务：右侧抽屉 -->
+  <el-drawer v-model="weeklySanityVisible" title="WeeklySanity任务" size="85%" destroy-on-close>
+    <WeeklyPage v-if="weeklySanityVisible" />
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
@@ -84,6 +89,7 @@ import { routes } from '@/router/routes'
 import { useUserStore } from '@/store/user'
 import { getPerms } from '@/utils/auth'
 import TaskPage from '@/pages/task/index.vue'
+import WeeklyPage from '@/pages/task/weekly.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,6 +97,7 @@ const userStore = useUserStore()
 
 const isCollapse = ref(false)
 const dailySanityVisible = ref(false)
+const weeklySanityVisible = ref(false)
 
 interface SubMenuItem {
   path: string
@@ -156,7 +163,12 @@ const avatarText = computed(() => (userStore.userInfo?.nickname || '用').slice(
 /** 菜单点击：抽屉项打开右侧抽屉，其余路由跳转 */
 const handleMenuSelect = (index: string) => {
   if (index.startsWith('drawer:')) {
-    dailySanityVisible.value = true
+    const key = index.replace('drawer:', '')
+    if (key === 'weekly-sanity') {
+      weeklySanityVisible.value = true
+    } else {
+      dailySanityVisible.value = true
+    }
     return
   }
   router.push(index)
