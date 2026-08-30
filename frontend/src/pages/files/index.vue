@@ -49,9 +49,9 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" :icon="Download" @click="handleDownload(row)">下载</el-button>
-            <el-button v-if="canEdit" link type="primary" :icon="Edit" @click="openRename(row)">重命名</el-button>
-            <el-button v-if="canEdit" link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="primary" :icon="Download" @click="handleDownload(toFile(row))">下载</el-button>
+            <el-button v-if="canEdit" link type="primary" :icon="Edit" @click="openRename(toFile(row))">重命名</el-button>
+            <el-button v-if="canEdit" link type="danger" :icon="Delete" @click="handleDelete(toFile(row))">删除</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -179,6 +179,11 @@ async function onFileChange(e: Event) {
     uploadVisible.value = false
     uploadPercent.value = 0
   }
+}
+
+/** 将 el-table 插槽的 DefaultRow 转换为强类型文件对象 */
+function toFile(row: any): FileResourceItem {
+  return row as FileResourceItem
 }
 
 /* ---------------- 下载 ---------------- */

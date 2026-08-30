@@ -51,7 +51,7 @@ export interface FileQuery {
 
 /** 分页查询文件资源 */
 export function getFileList(params: FileQuery): Promise<ApiResult<PageResult<FileResourceItem>>> {
-  return http.get<PageResult<FileResourceItem>>('/wiki/files', params)
+  return http.get<PageResult<FileResourceItem>>('/wiki/files', params as unknown as Record<string, unknown>)
 }
 
 /** 上传普通附件（返回文件记录） */

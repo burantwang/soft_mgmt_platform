@@ -151,32 +151,32 @@
             </el-table-column>
             <el-table-column label="失败原因" min-width="200">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'failReason')" placement="top" :disabled="!fieldDisabled(row, 'failReason')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
                   <div>
-                    <el-input v-model="editing[row.id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(row, 'failReason')" />
+                    <el-input v-model="editing[row.id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(toCase(row), 'failReason')" />
                   </div>
                 </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="结论进展" min-width="200">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'progress')" placement="top" :disabled="!fieldDisabled(row, 'progress')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
                   <div>
-                    <el-input v-model="editing[row.id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(row, 'progress')" />
+                    <el-input v-model="editing[row.id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(toCase(row), 'progress')" />
                   </div>
                 </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="责任人" width="140" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="assignDisabled(row) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(row)">
+                <el-tooltip :content="assignDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(toCase(row))">
                   <el-select
                     v-model="editing[row.id].assigneeId"
                     placeholder="选择"
                     clearable
-                    :disabled="assignDisabled(row)"
+                    :disabled="assignDisabled(toCase(row))"
                     :loading="saving[row.id]"
-                    @change="quickAssign(row, $event)"
+                    @change="quickAssign(toCase(row), $event)"
                   >
                     <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname || u.username" :value="u.id" />
                   </el-select>
@@ -185,12 +185,12 @@
             </el-table-column>
             <el-table-column label="状态" width="120" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'status')" placement="top" :disabled="!fieldDisabled(row, 'status')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'status')" placement="top" :disabled="!fieldDisabled(toCase(row), 'status')">
                   <div :class="['status-cell', statusClass(editing[row.id].status)]">
                     <el-select
                       v-model="editing[row.id].status"
                       placeholder="状态"
-                      :disabled="fieldDisabled(row, 'status')"
+                      :disabled="fieldDisabled(toCase(row), 'status')"
                       class="status-select"
                     >
                       <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
@@ -211,9 +211,9 @@
             </el-table-column>
             <el-table-column label="AI分析判断" width="110" align="center">
               <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(row, 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(row, 'aiAnalysisCorrect')">
+                <el-tooltip :content="fieldDisabledTip(toCase(row), 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(toCase(row), 'aiAnalysisCorrect')">
                   <div>
-                    <el-select v-model="editing[row.id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(row, 'aiAnalysisCorrect')" style="width: 70px">
+                    <el-select v-model="editing[row.id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(toCase(row), 'aiAnalysisCorrect')" style="width: 70px">
                       <el-option label="Y" :value="1" />
                       <el-option label="N" :value="0" />
                     </el-select>
@@ -223,9 +223,9 @@
             </el-table-column>
             <el-table-column label="操作" width="90" align="center" fixed="right">
               <template #default="{ row }">
-                <el-tooltip :content="saveDisabledTip(row)" placement="top" :disabled="!saveDisabled(row)">
+                <el-tooltip :content="saveDisabledTip(toCase(row))" placement="top" :disabled="!saveDisabled(toCase(row))">
                   <div>
-                    <el-button type="primary" size="small" :loading="saving[row.id]" :disabled="saveDisabled(row)" @click="saveCase(row)">保存</el-button>
+                    <el-button type="primary" size="small" :loading="saving[row.id]" :disabled="saveDisabled(toCase(row))" @click="saveCase(toCase(row))">保存</el-button>
                   </div>
                 </el-tooltip>
               </template>
@@ -366,7 +366,12 @@ function saveDisabled(row: GroupedFailCase): boolean {
 }
 
 function saveDisabledTip(row: GroupedFailCase): string {
-  return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
+  return saveDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''
+}
+
+/** 将 el-table 插槽的 DefaultRow 转换为强类型用例对象 */
+function toCase(row: any): GroupedFailCase {
+  return row as GroupedFailCase
 }
 
 /** 状态栏位样式类名 */
@@ -530,7 +535,7 @@ async function quickAssign(row: GroupedFailCase, val: number | string | undefine
   saving[row.id] = true
   try {
     await assignFailCaseApi(row.id, assigneeId)
-    row.assigneeId = assigneeId
+    row.assigneeId = assigneeId ?? undefined
     ElMessage.success(assigneeId == null ? '已取消指派' : '指派成功')
   } catch {
     // 接口失败时回滚下拉显示值，错误信息由拦截器统一提示
