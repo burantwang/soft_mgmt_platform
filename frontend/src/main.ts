@@ -8,7 +8,11 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
 import { permission } from './directives/permission'
+import { installDefaultPetPlugins } from './pet'
 import './styles/index.scss'
+
+// 安装小狮子电子宠物内置插件（快捷窗口 / 任务提醒预留）
+installDefaultPetPlugins()
 
 const app = createApp(App)
 

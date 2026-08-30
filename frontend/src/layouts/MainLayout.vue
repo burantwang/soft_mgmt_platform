@@ -79,6 +79,9 @@
   <el-drawer v-model="weeklySanityVisible" title="Weekly_Sanity" size="85%" destroy-on-close>
     <WeeklyPage v-if="weeklySanityVisible" />
   </el-drawer>
+
+  <!-- 小狮子电子宠物 -->
+  <PetLion />
 </template>
 
 <script setup lang="ts">
@@ -90,6 +93,7 @@ import { useUserStore } from '@/store/user'
 import { getPerms } from '@/utils/auth'
 import TaskPage from '@/pages/task/index.vue'
 import WeeklyPage from '@/pages/task/weekly.vue'
+import PetLion from '@/pet/PetLion.vue'
 
 const route = useRoute()
 const router = useRouter()
