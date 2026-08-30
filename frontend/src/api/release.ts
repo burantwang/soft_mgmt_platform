@@ -8,6 +8,7 @@ import type {
   FailTaskCreateForm,
   FailTaskDetailVO,
   FailTaskVO,
+  RecentDayStat,
   ReleaseProject,
   ReleaseRecordCreateForm,
   ReleaseRecordUpdateForm,
@@ -171,6 +172,11 @@ export function getGroupedFailCasesApi(params: { date?: string; branch?: string;
 /** 更新失败用例处理信息 */
 export function updateFailCaseApi(id: number, data: FailCaseUpdateForm): Promise<ApiResult<null>> {
   return http.put<null>(`/release/fail-cases/${id}`, data)
+}
+
+/** 最近7天 DailySanity 分析完成统计 */
+export function getRecentWeekStatsApi(): Promise<ApiResult<RecentDayStat[]>> {
+  return http.get<RecentDayStat[]>('/release/fail-cases/recent-week-stats')
 }
 
 /** 获取原始测试报告文件内容（返回 Blob，用于新窗口打开） */

@@ -15,6 +15,7 @@ import com.company.devplatform.module.release.service.ReleaseFailTaskService;
 import com.company.devplatform.module.release.vo.FailCaseGroupedVO;
 import com.company.devplatform.module.release.vo.FailTaskDetailVO;
 import com.company.devplatform.module.release.vo.FailTaskVO;
+import com.company.devplatform.module.release.vo.RecentDayStatVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -132,5 +133,12 @@ public class ReleaseFailTaskController {
     public Result<Void> updateCase(@PathVariable Long caseId, @Valid @RequestBody FailCaseUpdateDTO dto) {
         failTaskService.updateCase(caseId, dto);
         return Result.ok();
+    }
+
+    /** 最近7天 DailySanity 分析完成统计 */
+    @GetMapping("/fail-cases/recent-week-stats")
+    @SaCheckPermission("sonic:view")
+    public Result<List<RecentDayStatVO>> recentWeekStats() {
+        return Result.ok(failTaskService.recentWeekStats());
     }
 }

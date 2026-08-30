@@ -81,6 +81,11 @@ public interface ReleaseFailTaskService {
     List<FailCaseGroupedVO> listGroupedCases(FailCaseGroupedQuery query);
 
     /**
+     * 最近7天 DailySanity 分析完成统计（含今天，共7天）
+     */
+    List<com.company.devplatform.module.release.vo.RecentDayStatVO> recentWeekStats();
+
+    /**
      * 更新失败用例处理信息
      */
     void updateCase(Long caseId, FailCaseUpdateDTO dto);

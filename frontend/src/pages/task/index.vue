@@ -5,6 +5,37 @@
         <div class="page-title">DailySanity任务</div>
       </template>
 
+      <div class="week-stats">
+        <div class="week-stats-header">
+          <span class="ws-title">最近7天分析完成概况</span>
+          <span class="ws-sub">点击日期查看当天执行明细</span>
+        </div>
+        <div class="week-stats-body">
+          <div
+            v-for="day in weekStats"
+            :key="day.date"
+            class="day-cell"
+            :class="{ active: search.date === day.date, 'has-data': day.totalCount > 0 }"
+            @click="selectDate(day.date)"
+          >
+            <div class="dc-date">
+              {{ formatDayLabel(day.date) }}
+              <span v-if="isToday(day.date)" class="dc-today-dot"></span>
+            </div>
+            <div class="dc-rate" :class="rateClass(day)">{{ rateText(day) }}</div>
+            <div class="dc-bar">
+              <div class="dc-bar-inner" :class="rateClass(day)" :style="{ width: barWidth(day) }"></div>
+            </div>
+            <div class="dc-counts">
+              <span class="dc-count"><b>{{ day.totalCount }}</b> 失败</span>
+              <span class="dc-count"><b>{{ day.analyzedCount }}</b> 已分析</span>
+            </div>
+            <div v-if="pendingCount(day) > 0" class="dc-pending">未完成 <b>{{ pendingCount(day) }}</b></div>
+            <div v-else-if="day.totalCount > 0" class="dc-done">全部完成</div>
+          </div>
+        </div>
+      </div>
+
       <div class="search-bar">
         <div class="form-row">
           <div class="form-item">
@@ -195,8 +226,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getEnabledUsersApi, getGroupedFailCasesApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
-import type { FailCaseGrouped, GroupedFailCase, UserOption, FailCaseUpdateForm } from '@/types/release'
+import { getEnabledUsersApi, getGroupedFailCasesApi, getRecentWeekStatsApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
+import type { FailCaseGrouped, GroupedFailCase, RecentDayStat, UserOption, FailCaseUpdateForm } from '@/types/release'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
@@ -211,6 +242,7 @@ const loading = ref(false)
 const groups = ref<FailCaseGrouped[]>([])
 const activeNames = ref<string[]>([])
 const userOptions = ref<UserOption[]>([])
+const weekStats = ref<RecentDayStat[]>([])
 const saving = reactive<Record<number, boolean>>({})
 
 const search = reactive({
@@ -364,6 +396,57 @@ async function loadUsers() {
   }
 }
 
+async function loadWeekStats() {
+  try {
+    const res = await getRecentWeekStatsApi()
+    weekStats.value = res.data || []
+  } catch (e) {
+    // ignore
+  }
+}
+
+function selectDate(date: string) {
+  search.date = date
+  loadData()
+}
+
+function isToday(dateStr: string): boolean {
+  return dateStr === new Date().toISOString().slice(0, 10)
+}
+
+function formatDayLabel(dateStr: string): string {
+  const d = new Date(dateStr)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  const fmt = (dt: Date) => dt.toISOString().slice(0, 10)
+  if (dateStr === fmt(today)) return '今天'
+  if (dateStr === fmt(yesterday)) return '昨天'
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+/** 无执行明细时展示 None */
+function rateText(day: RecentDayStat): string {
+  if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return 'None'
+  return `${day.rate}%`
+}
+
+/** 完成率样式：100%绿 / 未完成橙 / 无数据灰 */
+function rateClass(day: RecentDayStat): string {
+  if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return 'none'
+  return day.rate >= 100 ? 'ok' : 'warn'
+}
+
+function barWidth(day: RecentDayStat): string {
+  if (day.totalCount === 0 || day.rate === null || day.rate === undefined) return '0%'
+  return `${day.rate}%`
+}
+
+function pendingCount(day: RecentDayStat): number {
+  return Math.max(day.totalCount - day.analyzedCount, 0)
+}
+
 async function loadData() {
   loading.value = true
   try {
@@ -419,6 +502,7 @@ onMounted(async () => {
     }
   }
   loadUsers()
+  loadWeekStats()
   loadData()
 })
 </script>
@@ -431,6 +515,173 @@ onMounted(async () => {
 .page-title {
   font-size: 18px;
   font-weight: 600;
+}
+
+.week-stats {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfd 0%, #ffffff 100%);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.week-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 8px;
+  border-bottom: 1px dashed #ebeef5;
+}
+
+.ws-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.ws-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #409eff, #79bbff);
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+
+.ws-sub {
+  font-size: 12px;
+  color: #a8abb2;
+}
+
+.week-stats-body {
+  display: flex;
+}
+
+.day-cell {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 12px 6px 10px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.day-cell + .day-cell {
+  border-left: 1px solid #f0f2f5;
+}
+
+.day-cell:hover {
+  background: #f5f7fa;
+}
+
+.day-cell.active {
+  background: linear-gradient(180deg, #eaf3ff 0%, #f0f7ff 100%);
+  box-shadow: inset 0 -2px 0 #409eff;
+}
+
+.day-cell.has-data {
+  background: linear-gradient(180deg, #bfe9d3 0%, #a3dcbf 100%);
+}
+
+.day-cell.has-data:hover {
+  background: linear-gradient(180deg, #aee2c9 0%, #93d4b4 100%);
+}
+
+.day-cell.has-data.active {
+  background: linear-gradient(180deg, #cfe4ff 0%, #b0d1ff 100%);
+  box-shadow: inset 0 -2px 0 #409eff;
+}
+
+.dc-date {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-today-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #409eff;
+  display: inline-block;
+}
+
+.dc-rate {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.dc-rate.ok {
+  color: #16a34a;
+}
+
+.dc-rate.warn {
+  color: #d97706;
+}
+
+.dc-rate.none {
+  color: #c0c4cc;
+  font-size: 18px;
+}
+
+.dc-bar {
+  height: 5px;
+  background: #f0f2f5;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 12px 8px;
+}
+
+.dc-bar-inner {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.dc-bar-inner.ok {
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+
+.dc-bar-inner.warn {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+
+.dc-counts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.dc-count b {
+  color: #606266;
+  font-weight: 600;
+}
+
+.dc-pending {
+  font-size: 12px;
+  color: #d97706;
+  margin-top: 4px;
+}
+
+.dc-pending b {
+  font-weight: 700;
+}
+
+.dc-done {
+  font-size: 12px;
+  color: #16a34a;
+  margin-top: 4px;
 }
 
 .mb-16 {

@@ -37,6 +37,7 @@ import com.company.devplatform.module.release.vo.FailCaseVO;
 import com.company.devplatform.module.release.vo.FailTaskDetailVO;
 import com.company.devplatform.module.release.vo.FailTaskVO;
 import com.company.devplatform.module.release.vo.GroupedFailCaseVO;
+import com.company.devplatform.module.release.vo.RecentDayStatVO;
 import com.company.devplatform.module.release.vo.ReportFileItemVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -583,6 +585,66 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
 
         refreshTaskStatus(task.getId());
         log.info("[失败任务] 更新用例 taskNo={} caseId={} status={}", task.getTaskNo(), c.getId(), dto.getStatus());
+    }
+
+    @Override
+    public List<RecentDayStatVO> recentWeekStats() {
+        LocalDate today = LocalDate.now();
+        LocalDate startDay = today.minusDays(6);
+        LocalDateTime start = startDay.atStartOfDay();
+        LocalDateTime end = today.atTime(LocalTime.MAX);
+
+        // 1. 查询最近7天的失败发布记录
+        LambdaQueryWrapper<ReleaseRecord> rw = new LambdaQueryWrapper<ReleaseRecord>()
+                .between(ReleaseRecord::getPublishTime, start, end)
+                .eq(ReleaseRecord::getResult, ReleaseResult.FAILED.getCode());
+        List<ReleaseRecord> records = recordMapper.selectList(rw);
+
+        // 2. 查询关联的 fail tasks
+        Set<Long> recordIds = records.stream().map(ReleaseRecord::getId).collect(Collectors.toSet());
+        List<ReleaseFailTask> tasks = recordIds.isEmpty() ? Collections.emptyList()
+                : taskMapper.selectList(new LambdaQueryWrapper<ReleaseFailTask>()
+                        .in(ReleaseFailTask::getRecordId, recordIds));
+
+        // 3. 查询所有 cases
+        Set<Long> taskIds = tasks.stream().map(ReleaseFailTask::getId).collect(Collectors.toSet());
+        List<ReleaseFailCase> allCases = taskIds.isEmpty() ? Collections.emptyList()
+                : caseMapper.selectList(new LambdaQueryWrapper<ReleaseFailCase>()
+                        .in(ReleaseFailCase::getTaskId, taskIds));
+
+        // 4. 按日期分组统计
+        Map<LocalDate, List<ReleaseRecord>> recordsByDate = records.stream()
+                .collect(Collectors.groupingBy(r -> r.getPublishTime().toLocalDate()));
+
+        List<RecentDayStatVO> result = new ArrayList<>();
+        for (LocalDate d = startDay; !d.isAfter(today); d = d.plusDays(1)) {
+            List<ReleaseRecord> dayRecords = recordsByDate.getOrDefault(d, Collections.emptyList());
+            Set<Long> dayRecordIds = dayRecords.stream().map(ReleaseRecord::getId).collect(Collectors.toSet());
+
+            List<ReleaseFailTask> dayTasks = tasks.stream()
+                    .filter(t -> dayRecordIds.contains(t.getRecordId()))
+                    .collect(Collectors.toList());
+            Set<Long> dayTaskIds = dayTasks.stream().map(ReleaseFailTask::getId).collect(Collectors.toSet());
+
+            List<ReleaseFailCase> dayCases = allCases.stream()
+                    .filter(c -> dayTaskIds.contains(c.getTaskId()))
+                    .collect(Collectors.toList());
+
+            int total = dayCases.size();
+            int analyzed = (int) dayCases.stream()
+                    .filter(c -> c.getStatus() != null && c.getStatus() >= FailCaseStatus.FIXED.getCode())
+                    .count();
+            // 当天无执行明细时 rate 为 null，前端展示 None
+            Integer rate = total > 0 ? (int) Math.round(analyzed * 100.0 / total) : null;
+
+            RecentDayStatVO vo = new RecentDayStatVO();
+            vo.setDate(d.toString());
+            vo.setTotalCount(total);
+            vo.setAnalyzedCount(analyzed);
+            vo.setRate(rate);
+            result.add(vo);
+        }
+        return result;
     }
 
     /* ==================== 私有方法：联动规则与组装 ==================== */

@@ -310,6 +310,15 @@ export interface FailCaseGrouped {
   reportFiles?: ReportFileItem[]
 }
 
+/** 最近某天 DailySanity 分析完成统计 */
+export interface RecentDayStat {
+  date: string
+  totalCount: number
+  analyzedCount: number
+  /** 分析完成率(%)，当天无执行明细时为 null */
+  rate: number | null
+}
+
 /** 处理失败用例入参 */
 export interface FailCaseHandleForm {
   caseId: number
