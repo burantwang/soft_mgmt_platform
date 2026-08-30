@@ -186,8 +186,13 @@
             <el-table-column label="状态" width="120" align="center">
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(row, 'status')" placement="top" :disabled="!fieldDisabled(row, 'status')">
-                  <div>
-                    <el-select v-model="editing[row.id].status" placeholder="状态" :disabled="fieldDisabled(row, 'status')">
+                  <div :class="['status-cell', statusClass(editing[row.id].status)]">
+                    <el-select
+                      v-model="editing[row.id].status"
+                      placeholder="状态"
+                      :disabled="fieldDisabled(row, 'status')"
+                      class="status-select"
+                    >
                       <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
                     </el-select>
                   </div>
@@ -362,6 +367,13 @@ function saveDisabled(row: GroupedFailCase): boolean {
 
 function saveDisabledTip(row: GroupedFailCase): string {
   return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
+}
+
+/** 状态栏位样式类名 */
+function statusClass(status: number | undefined): string {
+  if (status === 2) return 'status-processing'
+  if (status === 3 || status === 4) return 'status-fixed'
+  return ''
 }
 
 /** 分组状态统计：待处理/处理中/已修复(含非缺陷)/分析完成率 */
@@ -922,6 +934,21 @@ onMounted(async () => {
   color: #606266;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* 状态栏位底色（Element Plus 2.4+ 的 el-select 内部结构为 .el-select__wrapper） */
+.status-cell .status-select :deep(.el-select__wrapper) {
+  background-color: transparent;
+  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+.status-cell.status-processing .status-select :deep(.el-select__wrapper) {
+  background-color: #fff8e1 !important;
+  box-shadow: 0 0 0 1px #ffc107 inset !important;
+}
+.status-cell.status-fixed .status-select :deep(.el-select__wrapper) {
+  background-color: #e8f5e9 !important;
+  box-shadow: 0 0 0 1px #4caf50 inset !important;
 }
 </style>
 
