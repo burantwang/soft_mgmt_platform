@@ -549,10 +549,9 @@ async function openModuleReport(fileId: number) {
 }
 
 function toEditingForm(item: WeeklyFailCase): WeeklyFailCaseUpdateForm {
-  // 分析进展与结论合并为一列：初始化时拼接两字段历史内容，保存时同步写入两个字段
-  const combined = [item.progress, item.conclusion]
-    .filter((s) => s && s.trim())
-    .join('\n')
+  // 结论进展栏位合并展示，以 progress 为主、conclusion 兜底（兼容历史数据），
+  // 不再拼接两个字段，避免重复保存导致内容翻倍
+  const merged = item.progress || item.conclusion || ''
   return {
     status: item.status,
     assigneeId: item.assigneeId,
@@ -560,8 +559,8 @@ function toEditingForm(item: WeeklyFailCase): WeeklyFailCaseUpdateForm {
     fixPlan: item.fixPlan || '',
     isBug: item.isBug ?? 0,
     aiAnalysisCorrect: item.aiAnalysisCorrect,
-    progress: combined,
-    conclusion: combined
+    progress: merged,
+    conclusion: merged
   }
 }
 
@@ -689,6 +688,9 @@ async function quickAssign(row: WeeklyFailCase, val: number | string | undefined
 
 async function saveCase(row: WeeklyFailCase) {
   const form = editing[row.id]
+  // 结论进展栏位合并展示 progress+conclusion，保存时两字段保持一致，
+  // 避免删除栏位内容后，残留的 conclusion 旧值在下一次加载时又被合并回流
+  form.conclusion = form.progress
   saving[row.id] = true
   try {
     await updateWeeklyFailCaseApi(row.id, form)
