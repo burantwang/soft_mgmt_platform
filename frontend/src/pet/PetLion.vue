@@ -82,7 +82,16 @@ const LINES = [
 function loadConfig(): PetConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY)
-    if (raw) return { ...DEFAULT_CONFIG, ...(JSON.parse(raw) as Partial<PetConfig>) }
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<PetConfig>
+      // 只持久化外观偏好；显示/藏边状态每次进入都复位，杜绝脏数据导致找不到
+      return {
+        ...DEFAULT_CONFIG,
+        mute: saved.mute ?? DEFAULT_CONFIG.mute,
+        scale: saved.scale ?? DEFAULT_CONFIG.scale,
+        pos: saved.pos,
+      }
+    }
   } catch {
     /* 忽略损坏配置 */
   }
