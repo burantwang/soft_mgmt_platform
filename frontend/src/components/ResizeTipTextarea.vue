@@ -1,7 +1,6 @@
 <template>
   <el-tooltip
     :visible="hovering"
-    trigger="manual"
     placement="top"
     :show-after="0"
     :hide-after="0"

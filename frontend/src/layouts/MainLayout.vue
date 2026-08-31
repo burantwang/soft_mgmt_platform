@@ -74,6 +74,11 @@
     <TaskPage v-if="dailySanityVisible" />
   </el-drawer>
 
+  <!-- DVS：右侧抽屉 -->
+  <el-drawer v-model="dvsSanityVisible" title="DVS" size="85%" destroy-on-close>
+    <DvsPage v-if="dvsSanityVisible" />
+  </el-drawer>
+
   <!-- Weekly_Sanity：右侧抽屉 -->
   <el-drawer v-model="weeklySanityVisible" title="Weekly_Sanity" size="85%" destroy-on-close>
     <WeeklyPage v-if="weeklySanityVisible" />
@@ -92,6 +97,7 @@ import { useUserStore } from '@/store/user'
 import { getPerms } from '@/utils/auth'
 import TaskPage from '@/pages/task/index.vue'
 import WeeklyPage from '@/pages/task/weekly.vue'
+import DvsPage from '@/pages/task/dvs.vue'
 import PetLion from '@/pet/PetLion.vue'
 
 const route = useRoute()
@@ -101,6 +107,7 @@ const userStore = useUserStore()
 const isCollapse = ref(false)
 const dailySanityVisible = ref(false)
 const weeklySanityVisible = ref(false)
+const dvsSanityVisible = ref(false)
 
 interface SubMenuItem {
   path: string
@@ -169,6 +176,8 @@ const handleMenuSelect = (index: string) => {
     const key = index.replace('drawer:', '')
     if (key === 'weekly-sanity') {
       weeklySanityVisible.value = true
+    } else if (key === 'dvs-sanity') {
+      dvsSanityVisible.value = true
     } else {
       dailySanityVisible.value = true
     }

@@ -120,7 +120,7 @@
               clearable
               class="filter-select report-select"
               :disabled="!(group.reportFiles && group.reportFiles.length)"
-              @change="openReport(group, $event)"
+              @change="reportSel[groupKey(group)] = $event || undefined"
             >
               <el-option
                 v-for="f in group.reportFiles || []"
@@ -129,6 +129,13 @@
                 :value="f.fileId"
               />
             </el-select>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="!reportSel[groupKey(group)]"
+              @click="openReport(group, reportSel[groupKey(group)])"
+            >查看原始报告</el-button>
           </div>
 
           <FailCaseEditTable
@@ -334,6 +341,14 @@ async function loadData() {
     })
     groups.value = res.data || []
     activeNames.value = groups.value.map(groupKey)
+    // 仅一个报告文件时自动选中，便于直接点击「查看原始报告」
+    groups.value.forEach((g) => {
+      const key = groupKey(g)
+      const files = g.reportFiles || []
+      if (files.length === 1 && !reportSel[key]) {
+        reportSel[key] = files[0].fileId
+      }
+    })
   } finally {
     loading.value = false
   }

@@ -244,6 +244,7 @@ import { useUserStore } from '@/store/user'
 import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
 import { aiAnalyzeDailyFailCaseApi, assignFailCaseApi, updateFailCaseApi } from '@/api/release'
 import { aiAnalyzeWeeklyFailCaseApi, assignWeeklyFailCaseApi, updateWeeklyFailCaseApi } from '@/api/weekly'
+import { aiAnalyzeDvsFailCaseApi, assignDvsFailCaseApi, updateDvsFailCaseApi } from '@/api/dvs'
 import type { MyTaskCaseUpdateForm } from '@/types/mytask'
 import type { IssueCategory, UserOption } from '@/types/release'
 
@@ -376,7 +377,7 @@ interface EditRow {
 const props = withDefaults(
   defineProps<{
     rows: EditRow[]
-    board: 'daily' | 'weekly'
+    board: 'daily' | 'weekly' | 'dvs'
     userOptions: UserOption[]
     categories: IssueCategory[]
     redminePrefix: string
@@ -513,8 +514,10 @@ async function saveCase(row: any) {
   try {
     if (props.board === 'daily') {
       await updateFailCaseApi(row.id, form)
-    } else {
+    } else if (props.board === 'weekly') {
       await updateWeeklyFailCaseApi(row.id, form)
+    } else {
+      await updateDvsFailCaseApi(row.id, form)
     }
     ElMessage.success('保存成功')
     emit('updated')
@@ -542,8 +545,10 @@ async function quickAssign(row: any, val: number | string | undefined) {
   try {
     if (props.board === 'daily') {
       await assignFailCaseApi(row.id, assigneeId)
-    } else {
+    } else if (props.board === 'weekly') {
       await assignWeeklyFailCaseApi(row.id, assigneeId)
+    } else {
+      await assignDvsFailCaseApi(row.id, assigneeId)
     }
     row.assigneeId = assigneeId ?? undefined
     ElMessage.success(assigneeId == null ? '已取消指派' : '指派成功')
@@ -560,7 +565,9 @@ async function triggerAiAnalyze(row: any) {
   try {
     const res = props.board === 'daily'
       ? await aiAnalyzeDailyFailCaseApi(row.id)
-      : await aiAnalyzeWeeklyFailCaseApi(row.id)
+      : props.board === 'weekly'
+        ? await aiAnalyzeWeeklyFailCaseApi(row.id)
+        : await aiAnalyzeDvsFailCaseApi(row.id)
     const r = res.data
     if (r) {
       row.aiRootCause = r.rootCause

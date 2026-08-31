@@ -54,7 +54,20 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: 'Daily_Sanity', hidden: true }
           },
           {
+            // 个人任务置顶展示
+            path: 'mine',
+            name: 'MyTask',
+            component: () => import('@/pages/task/mine.vue'),
+            meta: { title: '个人任务', icon: 'List' }
+          },
+          {
             // 二级菜单项：以右侧抽屉方式打开
+            path: 'dvs-sanity',
+            name: 'DvsSanity',
+            component: () => import('@/pages/task/dvs.vue'),
+            meta: { title: 'DVS', drawer: true }
+          },
+          {
             path: 'daily-sanity',
             name: 'DailySanity',
             component: () => import('@/pages/task/index.vue'),
@@ -65,12 +78,6 @@ export const routes: RouteRecordRaw[] = [
             name: 'WeeklySanity',
             component: () => import('@/pages/task/weekly.vue'),
             meta: { title: 'Weekly_Sanity', drawer: true }
-          },
-          {
-            path: 'mine',
-            name: 'MyTask',
-            component: () => import('@/pages/task/mine.vue'),
-            meta: { title: '个人任务', icon: 'List' }
           }
         ]
       },

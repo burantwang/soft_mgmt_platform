@@ -19,7 +19,7 @@
             <FailCaseEditTable
               v-if="!loading && activeList.length > 0"
               :rows="activeList"
-              :board="(b.key as 'daily' | 'weekly')"
+              :board="(b.key as 'daily' | 'weekly' | 'dvs')"
               :user-options="userOptions"
               :categories="categories"
               :redmine-prefix="redminePrefix"
@@ -43,7 +43,7 @@
               <div v-show="historyExpanded" class="history-body">
                 <FailCaseEditTable
                   :rows="historyList"
-                  :board="(b.key as 'daily' | 'weekly')"
+                  :board="(b.key as 'daily' | 'weekly' | 'dvs')"
                   :user-options="userOptions"
                   :categories="categories"
                   :redmine-prefix="redminePrefix"
@@ -73,6 +73,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getEnabledUsersApi, getFailCaseMetaApi, getMyDailyCasesApi } from '@/api/release'
 import { getMyWeeklyCasesApi } from '@/api/weekly'
+import { getMyDvsCasesApi } from '@/api/dvs'
 import FailCaseEditTable from '@/components/FailCaseEditTable.vue'
 import type { MyTaskCase } from '@/types/mytask'
 import type { IssueCategory, UserOption } from '@/types/release'
@@ -104,6 +105,11 @@ const boards: Board[] = [
     key: 'weekly',
     label: 'Weekly_Sanity',
     fetch: async (scope) => (await getMyWeeklyCasesApi(scope)).data
+  },
+  {
+    key: 'dvs',
+    label: 'DVS',
+    fetch: async (scope) => (await getMyDvsCasesApi(scope)).data
   }
 ]
 
