@@ -161,20 +161,18 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
                   <div>
-                    <el-input
+                    <ResizeTipTextarea
                       v-if="isExpanded(row.id)"
                       :key="`fr-on-${row.id}`"
                       v-model="editing[row.id].failReason"
-                      type="textarea"
                       :autosize="{ minRows: 1, maxRows: 200 }"
                       placeholder="填写失败原因"
                       :disabled="fieldDisabled(toCase(row), 'failReason')"
                     />
-                    <el-input
+                    <ResizeTipTextarea
                       v-else
                       :key="`fr-off-${row.id}`"
                       v-model="editing[row.id].failReason"
-                      type="textarea"
                       :autosize="{ minRows: 1, maxRows: 2 }"
                       placeholder="填写失败原因"
                       :disabled="fieldDisabled(toCase(row), 'failReason')"
@@ -187,20 +185,18 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
                   <div>
-                    <el-input
+                    <ResizeTipTextarea
                       v-if="isExpanded(row.id)"
                       :key="`pr-on-${row.id}`"
                       v-model="editing[row.id].progress"
-                      type="textarea"
                       :autosize="{ minRows: 1, maxRows: 200 }"
                       placeholder="填写分析进展与结论"
                       :disabled="fieldDisabled(toCase(row), 'progress')"
                     />
-                    <el-input
+                    <ResizeTipTextarea
                       v-else
                       :key="`pr-off-${row.id}`"
                       v-model="editing[row.id].progress"
-                      type="textarea"
                       :autosize="{ minRows: 1, maxRows: 2 }"
                       placeholder="填写分析进展与结论"
                       :disabled="fieldDisabled(toCase(row), 'progress')"
@@ -285,6 +281,7 @@ import { ElMessage } from 'element-plus'
 import { assignFailCaseApi, getEnabledUsersApi, getGroupedFailCasesApi, getRecentWeekStatsApi, getReportContentApi, updateFailCaseApi } from '@/api/release'
 import type { FailCaseGrouped, GroupedFailCase, RecentDayStat, UserOption, FailCaseUpdateForm } from '@/types/release'
 import { useUserStore } from '@/store/user'
+import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
 
 const userStore = useUserStore()
 
@@ -610,14 +607,13 @@ function isExpanded(id: number): boolean {
   return expandedRowIds.value.has(id)
 }
 
-/** 长文本 textarea 的 autosize 配置：展开时按内容撑高，未展开时 2 行紧凑 */
-function textAreaAutoSize(id: number) {
-  return isExpanded(id) ? { minRows: 1, maxRows: 200 } : { minRows: 1, maxRows: 2 }
-}
-
 /** el-table expand 事件：把当前所有展开行同步到 expandedRowIds */
-function onExpandChange(_row: any, expandedRows: any[]) {
-  expandedRowIds.value = new Set(expandedRows.map((r) => r.id))
+function onExpandChange(_row: GroupedFailCase, expandedRows: GroupedFailCase[] | boolean) {
+  if (Array.isArray(expandedRows)) {
+    expandedRowIds.value = new Set(expandedRows.map((r) => r.id))
+  } else {
+    expandedRowIds.value = new Set()
+  }
 }
 
 onMounted(async () => {

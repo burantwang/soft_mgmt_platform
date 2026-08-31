@@ -176,7 +176,15 @@
             </el-select>
           </div>
 
-          <el-table :data="visibleCases(group)" border stripe size="small" class="case-table">
+          <el-table
+            :data="visibleCases(group)"
+            border
+            stripe
+            size="small"
+            class="case-table"
+            :expand-on-click-row="false"
+            @expand-change="onExpandChange"
+          >
             <el-table-column type="expand" width="45">
               <template #default="{ row }">
                 <div class="case-log">
@@ -198,7 +206,22 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
                   <div>
-                    <el-input v-model="editing[toCase(row).id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(toCase(row), 'failReason')" />
+                    <ResizeTipTextarea
+                      v-if="isExpanded(toCase(row).id)"
+                      :key="`fr-on-${toCase(row).id}`"
+                      v-model="editing[toCase(row).id].failReason"
+                      :autosize="{ minRows: 1, maxRows: 200 }"
+                      placeholder="填写失败原因"
+                      :disabled="fieldDisabled(toCase(row), 'failReason')"
+                    />
+                    <ResizeTipTextarea
+                      v-else
+                      :key="`fr-off-${toCase(row).id}`"
+                      v-model="editing[toCase(row).id].failReason"
+                      :autosize="{ minRows: 1, maxRows: 2 }"
+                      placeholder="填写失败原因"
+                      :disabled="fieldDisabled(toCase(row), 'failReason')"
+                    />
                   </div>
                 </el-tooltip>
               </template>
@@ -207,7 +230,22 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
                   <div>
-                    <el-input v-model="editing[toCase(row).id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(toCase(row), 'progress')" />
+                    <ResizeTipTextarea
+                      v-if="isExpanded(toCase(row).id)"
+                      :key="`pr-on-${toCase(row).id}`"
+                      v-model="editing[toCase(row).id].progress"
+                      :autosize="{ minRows: 1, maxRows: 200 }"
+                      placeholder="填写分析进展与结论"
+                      :disabled="fieldDisabled(toCase(row), 'progress')"
+                    />
+                    <ResizeTipTextarea
+                      v-else
+                      :key="`pr-off-${toCase(row).id}`"
+                      v-model="editing[toCase(row).id].progress"
+                      :autosize="{ minRows: 1, maxRows: 2 }"
+                      placeholder="填写分析进展与结论"
+                      :disabled="fieldDisabled(toCase(row), 'progress')"
+                    />
                   </div>
                 </el-tooltip>
               </template>
@@ -246,11 +284,11 @@
             </el-table-column>
             <el-table-column label="AI分析描述" min-width="200">
               <template #default="{ row }">
-                <el-tooltip placement="top" :show-after="150" :disabled="!row.aiAnalysis" popper-class="ai-tip-popper">
+                <el-tooltip placement="top" :show-after="150" :disabled="!row.aiAnalysis || isExpanded(toCase(row).id)" popper-class="ai-tip-popper">
                   <template #content>
                     <div class="ai-tip-content">{{ row.aiAnalysis }}</div>
                   </template>
-                  <div class="ai-cell">{{ row.aiAnalysis || '暂无分析' }}</div>
+                  <div :class="['ai-cell', { 'ai-cell-expanded': isExpanded(toCase(row).id) }]">{{ row.aiAnalysis || '暂无分析' }}</div>
                 </el-tooltip>
               </template>
             </el-table-column>
@@ -373,6 +411,7 @@ import type {
 } from '@/types/weekly'
 import type { ReleaseProject, UserOption } from '@/types/release'
 import { useUserStore } from '@/store/user'
+import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
 
 const userStore = useUserStore()
 
@@ -422,6 +461,23 @@ const statusFilterOptions = [
 /** 将 el-table 插槽的 DefaultRow 转换为强类型用例对象 */
 function toCase(row: any): WeeklyFailCase {
   return row as WeeklyFailCase
+}
+
+/** 行展开状态：用于让行内长文本栏位（失败原因/结论进展/AI 分析）按内容自适应撑高 */
+const expandedRowIds = ref<Set<number>>(new Set())
+
+/** 判断某行是否处于展开状态 */
+function isExpanded(id: number): boolean {
+  return expandedRowIds.value.has(id)
+}
+
+/** el-table expand 事件：把当前所有展开行同步到 expandedRowIds */
+function onExpandChange(_row: WeeklyFailCase, expandedRows: WeeklyFailCase[] | boolean) {
+  if (Array.isArray(expandedRows)) {
+    expandedRowIds.value = new Set(expandedRows.map((r) => r.id))
+  } else {
+    expandedRowIds.value = new Set()
+  }
 }
 
 // 每个分组当前选中的原始报告文件ID（仅用于展示选中项）
@@ -1244,6 +1300,16 @@ onMounted(async () => {
   color: #606266;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* 行展开时 AI 分析描述按内容撑高 */
+.ai-cell.ai-cell-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  overflow: visible;
+  max-height: none;
+  white-space: pre-wrap;
 }
 
 /* 状态栏位底色（Element Plus 2.4+ 的 el-select 内部结构为 .el-select__wrapper） */
