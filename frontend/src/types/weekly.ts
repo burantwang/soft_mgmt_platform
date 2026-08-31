@@ -91,6 +91,16 @@ export interface WeeklyFailCase {
   aiAnalysis?: string
   /** AI分析是否正确:1是 0否 */
   aiAnalysisCorrect?: number
+  /** AI分析根因 */
+  aiRootCause?: string
+  /** AI分析佐证 */
+  aiEvidence?: string
+  /** AI解决建议 */
+  aiSolution?: string
+  /** Bug单号(Redmine) */
+  bugNo?: string
+  /** 问题分类 */
+  issueCategory?: string
   publishTime?: string
 }
 
@@ -137,4 +147,8 @@ export interface WeeklyFailCaseUpdateForm {
   aiAnalysis?: string
   /** AI分析是否正确:1是 0否 */
   aiAnalysisCorrect?: number
+  /** Bug单号(Redmine) */
+  bugNo?: string
+  /** 问题分类 */
+  issueCategory?: string
 }

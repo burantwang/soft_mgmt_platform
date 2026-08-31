@@ -588,6 +588,8 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         if (dto.getAiAnalysisCorrect() != null) {
             c.setAiAnalysisCorrect(dto.getAiAnalysisCorrect());
         }
+        c.setBugNo(dto.getBugNo());
+        c.setIssueCategory(dto.getIssueCategory());
         caseMapper.updateById(c);
 
         refreshTaskStatus(task.getId());

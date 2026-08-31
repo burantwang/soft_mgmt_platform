@@ -23,6 +23,7 @@ import com.company.devplatform.module.weekly.mapper.WeeklyFailCaseMapper;
 import com.company.devplatform.module.weekly.mapper.WeeklyReportMapper;
 import com.company.devplatform.module.weekly.service.WeeklyReportPreviewStore;
 import com.company.devplatform.module.weekly.service.WeeklyReportService;
+import com.company.devplatform.module.weekly.vo.WeeklyFailCaseExcelVO;
 import com.company.devplatform.module.weekly.vo.WeeklyFailCaseVO;
 import com.company.devplatform.module.weekly.vo.WeeklyGroupedVO;
 import com.company.devplatform.module.weekly.vo.WeeklyModuleVO;
@@ -327,6 +328,11 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
                 cv.setConclusion(c.getConclusion());
                 cv.setAiAnalysis(c.getAiAnalysis());
                 cv.setAiAnalysisCorrect(c.getAiAnalysisCorrect());
+                cv.setAiRootCause(c.getAiRootCause());
+                cv.setAiEvidence(c.getAiEvidence());
+                cv.setAiSolution(c.getAiSolution());
+                cv.setBugNo(c.getBugNo());
+                cv.setIssueCategory(c.getIssueCategory());
                 cv.setPublishTime(report.getPublishTime());
                 group.getCases().add(cv);
             }
@@ -427,6 +433,57 @@ public class WeeklyReportServiceImpl implements WeeklyReportService {
             log.error("[WeeklySanity] 输出原始报告失败 fileId={}", fileId, e);
             throw new BusinessException(ErrorCode.FILE_READ_ERROR, "报告文件读取失败");
         }
+    }
+
+    @Override
+    public Map<String, List<WeeklyFailCaseExcelVO>> exportByDate(LocalDate date) {
+        WeeklyGroupedQuery query = new WeeklyGroupedQuery();
+        query.setDate(date);
+        List<WeeklyGroupedVO> groups = listGroupedCases(query);
+        Map<String, List<WeeklyFailCaseExcelVO>> result = new LinkedHashMap<>();
+        for (WeeklyGroupedVO g : groups) {
+            String sheet = g.getBranch() + "-" + g.getProjectName();
+            List<WeeklyFailCaseExcelVO> rows = new ArrayList<>();
+            for (WeeklyFailCaseVO c : g.getCases()) {
+                rows.add(toExcel(g, c));
+            }
+            result.put(sheet, rows);
+        }
+        return result;
+    }
+
+    private WeeklyFailCaseExcelVO toExcel(WeeklyGroupedVO g, WeeklyFailCaseVO c) {
+        WeeklyFailCaseExcelVO vo = new WeeklyFailCaseExcelVO();
+        vo.setBranch(g.getBranch());
+        vo.setProjectName(g.getProjectName());
+        vo.setCaseName(c.getCaseName());
+        vo.setCaseTypeDesc(c.getCaseTypeDesc());
+        vo.setFailReason(c.getFailReason());
+        vo.setFixPlan(c.getFixPlan());
+        vo.setConclusion(join(" | ", c.getProgress(), c.getIssueCategory()));
+        vo.setBugNo(c.getBugNo());
+        vo.setAssigneeName(c.getAssigneeName());
+        vo.setStatusDesc(c.getStatusDesc());
+        vo.setAiRootCause(c.getAiRootCause());
+        vo.setAiEvidence(c.getAiEvidence());
+        vo.setAiSolution(c.getAiSolution());
+        vo.setAiAnalysisCorrect(c.getAiAnalysisCorrect() == null
+                ? null : (c.getAiAnalysisCorrect() == 1 ? "Y" : "N"));
+        vo.setPublishTime(c.getPublishTime());
+        return vo;
+    }
+
+    private String join(String sep, String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (StringUtils.hasText(p)) {
+                if (sb.length() > 0) {
+                    sb.append(sep);
+                }
+                sb.append(p);
+            }
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     /* ==================== 私有辅助 ==================== */

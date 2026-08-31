@@ -264,6 +264,10 @@ export interface FailCaseUpdateForm {
   aiAnalysis?: string
   /** AI分析是否正确:1是 0否 */
   aiAnalysisCorrect?: number
+  /** Bug单号(Redmine) */
+  bugNo?: string
+  /** 问题分类 */
+  issueCategory?: string
 }
 
 /** 分支×机型分组的失败用例明细 */
@@ -288,6 +292,16 @@ export interface GroupedFailCase {
   aiAnalysis?: string
   /** AI分析是否正确:1是 0否 */
   aiAnalysisCorrect?: number
+  /** AI分析根因 */
+  aiRootCause?: string
+  /** AI分析佐证 */
+  aiEvidence?: string
+  /** AI解决建议 */
+  aiSolution?: string
+  /** Bug单号(Redmine) */
+  bugNo?: string
+  /** 问题分类 */
+  issueCategory?: string
   publishTime?: string
 }
 
@@ -325,4 +339,42 @@ export interface FailCaseHandleForm {
   status: number
   failReason?: string
   fixPlan?: string
+}
+
+/** 问题分类 */
+export interface IssueCategory {
+  id: number
+  categoryName: string
+  categoryCode: string
+  status: number
+  sortOrder?: number
+}
+
+/** 失败用例元数据（问题分类 + Redmine 前缀） */
+export interface FailCaseMeta {
+  categories: IssueCategory[]
+  redminePrefix: string
+}
+
+/** AI 分析结果（结构化） */
+export interface AiAnalysisResult {
+  rootCause: string
+  evidence: string
+  solution: string
+}
+
+/** AI 配置 */
+export interface AiConfig {
+  baseUrl: string
+  apiKey: string
+  model: string
+}
+
+/** AI 技能文档 */
+export interface AiSkill {
+  id: number
+  title: string
+  content: string
+  enabled: number
+  updateTime?: string
 }

@@ -37,6 +37,9 @@ public class WikiDoc {
     /** 最后编辑人 */
     private Long editorId;
 
+    /** 启用状态:1启用 0停用（仅 AI 技能文档使用，普通 wiki 文档恒为 1） */
+    private Integer enabled;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

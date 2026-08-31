@@ -2,12 +2,14 @@ package com.company.devplatform.module.weekly.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.company.devplatform.common.Result;
+import com.company.devplatform.module.release.vo.AiAnalysisResult;
 import com.company.devplatform.module.weekly.dto.WeeklyFailCaseAssignDTO;
 import com.company.devplatform.module.weekly.dto.WeeklyFailCaseUpdateDTO;
 import com.company.devplatform.module.weekly.service.WeeklyFailCaseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,5 +39,12 @@ public class WeeklyFailCaseController {
     public Result<Void> assignCase(@PathVariable Long caseId, @Valid @RequestBody WeeklyFailCaseAssignDTO dto) {
         failCaseService.assignCaseAssignee(caseId, dto);
         return Result.ok();
+    }
+
+    /** 触发 AI 分析失败用例（同步等待结果，回写根因/佐证/修复建议） */
+    @PostMapping("/fail-cases/{caseId}/ai-analyze")
+    @SaCheckPermission("sonic:view")
+    public Result<AiAnalysisResult> aiAnalyze(@PathVariable Long caseId) {
+        return Result.ok(failCaseService.aiAnalyze(caseId));
     }
 }

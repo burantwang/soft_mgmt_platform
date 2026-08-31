@@ -4,7 +4,14 @@
       <template #header>
         <div class="page-header">
           <div class="page-title">Weekly_Sanity</div>
-          <el-button type="primary" @click="onPickReport">上传测试报告</el-button>
+          <div class="page-header-right">
+            <template v-if="isAdmin">
+              <el-button @click="categoryDialogVisible = true">分类管理</el-button>
+              <el-button @click="openPrefixDialog">Bug 前缀配置</el-button>
+              <el-button @click="openAiConfigDialog">AI 配置</el-button>
+            </template>
+            <el-button type="primary" @click="onPickReport">上传测试报告</el-button>
+          </div>
         </div>
       </template>
 
@@ -60,6 +67,7 @@
           <div class="form-item actions">
             <el-button type="primary" @click="loadData">查询</el-button>
             <el-button @click="resetSearch">重置</el-button>
+            <el-button type="success" :loading="exporting" @click="handleExport">导出 Excel</el-button>
           </div>
         </div>
       </div>
@@ -175,23 +183,6 @@
               <el-option v-for="s in statusFilterOptions" :key="s.value" :label="s.label" :value="s.value" />
             </el-select>
             <el-button size="small" text @click="resetGroupFilter(group)">重置</el-button>
-            <span class="filter-divider"></span>
-            <label>原始报告</label>
-            <el-select
-              :model-value="reportSel[groupKey(group)]"
-              placeholder="选择报告文件"
-              clearable
-              class="filter-select report-select"
-              :disabled="!(group.reportFiles && group.reportFiles.length)"
-              @change="openReport(group, $event)"
-            >
-              <el-option
-                v-for="f in group.reportFiles || []"
-                :key="f.fileId"
-                :label="f.fileName"
-                :value="f.fileId"
-              />
-            </el-select>
           </div>
 
           <el-table
@@ -206,6 +197,45 @@
           >
             <el-table-column type="expand" width="45">
               <template #default="{ row }">
+                <div class="ai-block">
+                  <div class="ai-title">AI 分析</div>
+                  <template v-if="row.aiRootCause || row.aiEvidence || row.aiSolution">
+                    <div class="ai-item">
+                      <span class="ai-label">根因</span>
+                      <div class="ai-text">{{ row.aiRootCause || '暂无' }}</div>
+                    </div>
+                    <div class="ai-item">
+                      <span class="ai-label">佐证</span>
+                      <div class="ai-text">{{ row.aiEvidence || '暂无' }}</div>
+                    </div>
+                    <div class="ai-item">
+                      <span class="ai-label">解决建议</span>
+                      <div class="ai-text">{{ row.aiSolution || '暂无' }}</div>
+                    </div>
+                    <div class="ai-item ai-verdict">
+                      <span class="ai-label">分析判断</span>
+                      <el-select
+                        v-model="editing[toCase(row).id].aiAnalysisCorrect"
+                        placeholder=""
+                        :disabled="fieldDisabled(toCase(row), 'aiAnalysisCorrect')"
+                        style="width: 90px"
+                      >
+                        <el-option label="Y" :value="1" />
+                        <el-option label="N" :value="0" />
+                      </el-select>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="ai-empty">
+                      <el-button
+                        type="primary"
+                        size="small"
+                        :loading="aiLoading[toCase(row).id]"
+                        @click="triggerAiAnalyze(toCase(row))"
+                      >启用 AI 分析</el-button>
+                    </div>
+                  </template>
+                </div>
                 <div class="case-log">
                   <div class="log-title">用例运行日志</div>
                   <pre v-if="row.caseLog" class="log-content">{{ row.caseLog }}</pre>
@@ -269,6 +299,38 @@
                 </el-tooltip>
               </template>
             </el-table-column>
+            <el-table-column label="问题分类" width="130" align="center">
+              <template #default="{ row }">
+                <el-select
+                  v-model="editing[toCase(row).id].issueCategory"
+                  placeholder="选择"
+                  clearable
+                  :disabled="fieldDisabled(toCase(row), 'failReason')"
+                  style="width: 110px"
+                >
+                  <el-option v-for="c in categories" :key="c.id" :label="c.categoryName" :value="c.categoryName" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="Bug单号" width="130" align="center">
+              <template #default="{ row }">
+                <div class="bug-no-cell">
+                  <el-input
+                    v-model="editing[toCase(row).id].bugNo"
+                    placeholder=""
+                    :disabled="fieldDisabled(toCase(row), 'failReason')"
+                    style="width: 80px"
+                  />
+                  <el-button
+                    v-if="editing[toCase(row).id].bugNo"
+                    link
+                    type="primary"
+                    size="small"
+                    @click="jumpToBug(editing[toCase(row).id].bugNo)"
+                  >跳转</el-button>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="责任人" width="140" align="center">
               <template #default="{ row }">
                 <el-tooltip :content="assignDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(toCase(row))">
@@ -297,28 +359,6 @@
                     >
                       <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
                       <el-option key="closed" label="已关闭" :value="5" :disabled="!isAdmin" />
-                    </el-select>
-                  </div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="AI分析描述" min-width="200">
-              <template #default="{ row }">
-                <el-tooltip placement="top" :show-after="150" :disabled="!row.aiAnalysis || isExpanded(toCase(row).id)" popper-class="ai-tip-popper">
-                  <template #content>
-                    <div class="ai-tip-content">{{ row.aiAnalysis }}</div>
-                  </template>
-                  <div :class="['ai-cell', { 'ai-cell-expanded': isExpanded(toCase(row).id) }]">{{ row.aiAnalysis || '暂无分析' }}</div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="AI分析判断" width="110" align="center">
-              <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(toCase(row), 'aiAnalysisCorrect')" placement="top" :disabled="!fieldDisabled(toCase(row), 'aiAnalysisCorrect')">
-                  <div>
-                    <el-select v-model="editing[toCase(row).id].aiAnalysisCorrect" placeholder="" :disabled="fieldDisabled(toCase(row), 'aiAnalysisCorrect')" style="width: 70px">
-                      <el-option label="Y" :value="1" />
-                      <el-option label="N" :value="0" />
                     </el-select>
                   </div>
                 </el-tooltip>
@@ -405,6 +445,91 @@
         <el-button type="primary" :loading="submitting" @click="confirmReport">确认入库</el-button>
       </template>
     </el-dialog>
+
+    <!-- 分类管理弹窗（仅管理员） -->
+    <el-dialog v-model="categoryDialogVisible" title="问题分类管理" width="520px" destroy-on-close>
+      <div class="category-list">
+        <div v-for="c in categories" :key="c.id" class="category-row">
+          <span class="category-name" :class="{ 'is-off': c.status !== 1 }">{{ c.categoryName }}</span>
+          <el-button
+            size="small"
+            :type="c.status === 1 ? 'danger' : 'success'"
+            text
+            @click="toggleCategoryStatus(c)"
+          >{{ c.status === 1 ? '停用' : '启用' }}</el-button>
+        </div>
+      </div>
+      <div class="category-add">
+        <el-input v-model="newCategoryName" placeholder="新分类名称" style="width: 200px" />
+        <el-button type="primary" @click="addCategory">新增</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- Redmine 前缀配置弹窗（仅管理员） -->
+    <el-dialog v-model="prefixDialogVisible" title="Bug 系统地址前缀配置" width="520px" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item label="地址前缀">
+          <el-input v-model="prefixInput" placeholder="如 http://100.60.183.51:300/issues/" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="prefixDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="savePrefix">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI 配置弹窗（仅管理员） -->
+    <el-dialog v-model="aiConfigDialogVisible" title="AI 服务配置" width="640px" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item label="Base URL">
+          <el-input v-model="aiConfigForm.baseUrl" placeholder="如 https://api.openai.com/v1" />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input v-model="aiConfigForm.apiKey" type="password" show-password placeholder="API Key" />
+        </el-form-item>
+        <el-form-item label="模型">
+          <el-input v-model="aiConfigForm.model" placeholder="如 gpt-4o-mini / deepseek-v4-flash" />
+        </el-form-item>
+        <el-form-item label="技能集">
+          <div class="skill-list">
+            <div v-for="s in skills" :key="s.id" class="skill-row">
+              <el-switch v-model="s.enabled" :active-value="1" :inactive-value="0" @change="toggleSkill(s)" />
+              <span class="skill-name" :class="{ 'is-off': s.enabled !== 1 }">{{ s.title }}</span>
+              <el-button size="small" text type="primary" @click="openSkillEdit(s)">编辑</el-button>
+              <el-button size="small" text type="danger" @click="removeSkill(s)">删除</el-button>
+            </div>
+            <el-button size="small" type="primary" plain @click="openSkillEdit()">+ 新增技能</el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="aiConfigDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveAiConfig">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- skill 编辑弹窗（markdown） -->
+    <el-dialog v-model="skillEditDialogVisible" :title="skillEditForm.id ? '编辑技能' : '新增技能'" width="900px" destroy-on-close>
+      <el-form label-width="70px">
+        <el-form-item label="文件名">
+          <el-input v-model="skillEditForm.title" placeholder="如 skill1.md" />
+        </el-form-item>
+      </el-form>
+      <div class="skill-editor">
+        <div class="skill-editor-pane">
+          <div class="pane-title">Markdown 编辑</div>
+          <el-input v-model="skillEditForm.content" type="textarea" :rows="16" placeholder="输入 markdown 内容..." />
+        </div>
+        <div class="skill-editor-pane">
+          <div class="pane-title">预览</div>
+          <div class="skill-preview markdown-body" v-html="skillPreviewHtml"></div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="skillEditDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveSkill">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -412,8 +537,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import {
+  aiAnalyzeWeeklyFailCaseApi,
   assignWeeklyFailCaseApi,
   confirmWeeklyReportApi,
+  exportWeeklyExcelApi,
   getWeeklyEnabledUsersApi,
   getWeeklyGroupedCasesApi,
   getWeeklyRecentWeekStatsApi,
@@ -421,7 +548,20 @@ import {
   previewWeeklyReportApi,
   updateWeeklyFailCaseApi
 } from '@/api/weekly'
-import { getProjectEnabledApi } from '@/api/release'
+import {
+  addIssueCategoryApi,
+  createAiSkillApi,
+  deleteAiSkillApi,
+  getAiConfigApi,
+  getAiSkillsApi,
+  getFailCaseMetaApi,
+  getProjectEnabledApi,
+  toggleAiSkillApi,
+  updateAiConfigApi,
+  updateAiSkillApi,
+  updateIssueCategoryStatusApi,
+  updateRedminePrefixApi
+} from '@/api/release'
 import type {
   WeeklyFailCase,
   WeeklyFailCaseGrouped,
@@ -429,7 +569,9 @@ import type {
   WeeklyRecentDayStat,
   WeeklyReportPreviewVO
 } from '@/types/weekly'
-import type { ReleaseProject, UserOption } from '@/types/release'
+import type { AiAnalysisResult, AiConfig, AiSkill, IssueCategory, ReleaseProject, UserOption } from '@/types/release'
+import { marked } from 'marked'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { useUserStore } from '@/store/user'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
@@ -443,11 +585,42 @@ const isAdmin = computed(() => {
 })
 
 const loading = ref(false)
+const exporting = ref(false)
 const groups = ref<WeeklyFailCaseGrouped[]>([])
 const activeNames = ref<string[]>([])
 const userOptions = ref<UserOption[]>([])
 const weekStats = ref<WeeklyRecentDayStat[]>([])
 const saving = reactive<Record<number, boolean>>({})
+
+// 失败用例元数据：问题分类 + Redmine 前缀
+const categories = ref<IssueCategory[]>([])
+const redminePrefix = ref('')
+// 分类管理弹窗（仅管理员）
+const categoryDialogVisible = ref(false)
+const newCategoryName = ref('')
+// Redmine 前缀配置弹窗（仅管理员）
+const prefixDialogVisible = ref(false)
+const prefixInput = ref('')
+// AI 分析加载状态
+const aiLoading = reactive<Record<number, boolean>>({})
+// AI 配置弹窗（仅管理员）
+const aiConfigDialogVisible = ref(false)
+const aiConfigForm = reactive<AiConfig>({ baseUrl: '', apiKey: '', model: '' })
+// 技能集
+const SKILL_MODULE = 'weekly_sanity'
+const skills = ref<AiSkill[]>([])
+const skillEditDialogVisible = ref(false)
+const skillEditForm = reactive<{ id: number | null; title: string; content: string }>({ id: null, title: '', content: '' })
+
+/** skill markdown 预览 */
+const skillPreviewHtml = computed(() => {
+  if (!skillEditForm.content) return ''
+  try {
+    return sanitizeHtml(marked.parse(skillEditForm.content) as string)
+  } catch {
+    return ''
+  }
+})
 
 const search = reactive({
   date: new Date().toISOString().slice(0, 10),
@@ -511,9 +684,6 @@ function onExpandChange(_row: WeeklyFailCase, expandedRows: WeeklyFailCase[] | b
     expandedRowIds.value = new Set()
   }
 }
-
-// 每个分组当前选中的原始报告文件ID（仅用于展示选中项）
-const reportSel = reactive<Record<string, number | undefined>>({})
 
 function groupKey(group: WeeklyFailCaseGrouped) {
   return `${group.branch}@@${group.projectName}`
@@ -625,20 +795,6 @@ function groupStatusStats(group: WeeklyFailCaseGrouped) {
   return { pending, processing, fixed, closed, rate }
 }
 
-/** 打开该分组的原始 HTML 测试报告（新窗口） */
-async function openReport(group: WeeklyFailCaseGrouped, fileId?: number) {
-  if (!fileId) return
-  try {
-    const blob = await getWeeklyReportContentApi(fileId)
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-    // 新窗口加载后释放 Blob URL，避免内存占用
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  } catch {
-    // 错误提示已在请求拦截器统一处理
-  }
-}
-
 /** 打开模块的原始 HTML 报告（新窗口） */
 async function openModuleReport(fileId: number) {
   try {
@@ -663,7 +819,9 @@ function toEditingForm(item: WeeklyFailCase): WeeklyFailCaseUpdateForm {
     isBug: item.isBug ?? 0,
     aiAnalysisCorrect: item.aiAnalysisCorrect,
     progress: merged,
-    conclusion: merged
+    conclusion: merged,
+    bugNo: item.bugNo || '',
+    issueCategory: item.issueCategory || ''
   }
 }
 
@@ -672,6 +830,185 @@ async function loadUsers() {
     const res = await getWeeklyEnabledUsersApi()
     userOptions.value = res.data || []
   } catch (e) {
+    // ignore
+  }
+}
+
+/** 加载失败用例元数据（问题分类 + Redmine 前缀） */
+async function loadMeta() {
+  try {
+    const res = await getFailCaseMetaApi()
+    categories.value = res.data?.categories || []
+    redminePrefix.value = res.data?.redminePrefix || ''
+  } catch (e) {
+    // ignore
+  }
+}
+
+/** 打开 Redmine Bug 界面 */
+function jumpToBug(bugNo?: string) {
+  if (!bugNo) return
+  window.open(`${redminePrefix.value || ''}${bugNo}`, '_blank')
+}
+
+/** 新增问题分类（仅管理员） */
+async function addCategory() {
+  const name = newCategoryName.value.trim()
+  if (!name) {
+    ElMessage.warning('请输入分类名称')
+    return
+  }
+  try {
+    await addIssueCategoryApi({ categoryName: name })
+    ElMessage.success('新增成功')
+    newCategoryName.value = ''
+    categoryDialogVisible.value = false
+    await loadMeta()
+  } catch {
+    // ignore
+  }
+}
+
+/** 停用/启用分类（仅管理员） */
+async function toggleCategoryStatus(cat: IssueCategory) {
+  try {
+    await updateIssueCategoryStatusApi(cat.id, cat.status === 1 ? 0 : 1)
+    ElMessage.success(cat.status === 1 ? '已停用' : '已启用')
+    await loadMeta()
+  } catch {
+    // ignore
+  }
+}
+
+/** 打开 Redmine 前缀配置弹窗 */
+function openPrefixDialog() {
+  prefixInput.value = redminePrefix.value
+  prefixDialogVisible.value = true
+}
+
+/** 保存 Redmine 前缀（仅管理员） */
+async function savePrefix() {
+  const prefix = prefixInput.value.trim()
+  if (!prefix) {
+    ElMessage.warning('请输入地址前缀')
+    return
+  }
+  try {
+    await updateRedminePrefixApi(prefix)
+    ElMessage.success('保存成功')
+    redminePrefix.value = prefix
+    prefixDialogVisible.value = false
+  } catch {
+    // ignore
+  }
+}
+
+/** 触发 AI 分析失败用例 */
+async function triggerAiAnalyze(row: WeeklyFailCase) {
+  aiLoading[row.id] = true
+  try {
+    const res = await aiAnalyzeWeeklyFailCaseApi(row.id)
+    const r = res.data
+    if (r) {
+      row.aiRootCause = r.rootCause
+      row.aiEvidence = r.evidence
+      row.aiSolution = r.solution
+    }
+    ElMessage.success('AI 分析完成')
+  } catch {
+    // 错误提示已在请求拦截器统一处理
+  } finally {
+    aiLoading[row.id] = false
+  }
+}
+
+/** 打开 AI 配置弹窗（仅管理员） */
+async function openAiConfigDialog() {
+  try {
+    const res = await getAiConfigApi()
+    aiConfigForm.baseUrl = res.data?.baseUrl || ''
+    aiConfigForm.apiKey = res.data?.apiKey || ''
+    aiConfigForm.model = res.data?.model || ''
+  } catch {
+    // ignore
+  }
+  aiConfigDialogVisible.value = true
+  loadSkills()
+}
+
+/** 保存 AI 配置（仅管理员） */
+async function saveAiConfig() {
+  try {
+    await updateAiConfigApi({ ...aiConfigForm })
+    ElMessage.success('保存成功')
+    aiConfigDialogVisible.value = false
+  } catch {
+    // ignore
+  }
+}
+
+/** 加载技能集列表 */
+async function loadSkills() {
+  try {
+    const res = await getAiSkillsApi(SKILL_MODULE)
+    skills.value = res.data || []
+  } catch {
+    // ignore
+  }
+}
+
+/** 打开 skill 编辑弹窗（新增或编辑） */
+function openSkillEdit(skill?: AiSkill) {
+  if (skill) {
+    skillEditForm.id = skill.id
+    skillEditForm.title = skill.title
+    skillEditForm.content = skill.content || ''
+  } else {
+    skillEditForm.id = null
+    skillEditForm.title = ''
+    skillEditForm.content = ''
+  }
+  skillEditDialogVisible.value = true
+}
+
+/** 保存 skill */
+async function saveSkill() {
+  const title = skillEditForm.title.trim()
+  if (!title) {
+    ElMessage.warning('请输入文件名')
+    return
+  }
+  try {
+    if (skillEditForm.id) {
+      await updateAiSkillApi(skillEditForm.id, { title, content: skillEditForm.content })
+    } else {
+      await createAiSkillApi(SKILL_MODULE, { title, content: skillEditForm.content })
+    }
+    ElMessage.success('保存成功')
+    skillEditDialogVisible.value = false
+    await loadSkills()
+  } catch {
+    // ignore
+  }
+}
+
+/** 启用/停用 skill */
+async function toggleSkill(skill: AiSkill) {
+  try {
+    await toggleAiSkillApi(skill.id, skill.enabled === 1 ? 0 : 1)
+    await loadSkills()
+  } catch {
+    // ignore
+  }
+}
+
+/** 删除 skill */
+async function removeSkill(skill: AiSkill) {
+  try {
+    await deleteAiSkillApi(skill.id)
+    ElMessage.success('已删除')
+    await loadSkills()
+  } catch {
     // ignore
   }
 }
@@ -757,6 +1094,19 @@ function resetSearch() {
   search.projectName = ''
   search.caseName = ''
   loadData()
+}
+
+/** 导出当天全部失败用例 Excel */
+async function handleExport() {
+  exporting.value = true
+  try {
+    await exportWeeklyExcelApi(search.date)
+    ElMessage.success('导出成功')
+  } catch {
+    // 错误提示已在请求拦截器统一处理
+  } finally {
+    exporting.value = false
+  }
 }
 
 /** 快速指派责任人：下拉选择即保存生效，无需点击保存按钮 */
@@ -918,6 +1268,7 @@ onMounted(async () => {
   loadWeekStats()
   loadData()
   loadProjects()
+  loadMeta()
 })
 </script>
 
@@ -931,6 +1282,133 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
 }
+
+.page-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 分类管理弹窗 */
+.category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafbfd;
+}
+.category-name {
+  font-size: 13px;
+  color: #303133;
+}
+.category-name.is-off {
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+.category-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 技能集列表 */
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafbfd;
+}
+.skill-name {
+  flex: 1;
+  font-size: 13px;
+  color: #303133;
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+.skill-name.is-off {
+  color: #c0c4cc;
+  text-decoration: line-through;
+}
+
+/* skill markdown 编辑器 */
+.skill-editor {
+  display: flex;
+  gap: 12px;
+  height: 420px;
+}
+.skill-editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pane-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 6px;
+}
+.skill-editor-pane :deep(.el-textarea) {
+  flex: 1;
+}
+.skill-editor-pane :deep(.el-textarea__inner) {
+  height: 100% !important;
+  min-height: 360px;
+}
+.skill-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafbfd;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #303133;
+  word-break: break-word;
+}
+.skill-preview :deep(h1),
+.skill-preview :deep(h2),
+.skill-preview :deep(h3) {
+  margin: 10px 0 6px;
+  font-weight: 600;
+}
+.skill-preview :deep(h1) { font-size: 18px; }
+.skill-preview :deep(h2) { font-size: 16px; }
+.skill-preview :deep(h3) { font-size: 14px; }
+.skill-preview :deep(p) { margin: 6px 0; }
+.skill-preview :deep(code) {
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 12.5px;
+}
+.skill-preview :deep(pre) {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 10px;
+  border-radius: 6px;
+  overflow: auto;
+}
+.skill-preview :deep(ul),
+.skill-preview :deep(ol) { padding-left: 20px; margin: 6px 0; }
 
 .page-title {
   font-size: 18px;
@@ -1331,6 +1809,56 @@ onMounted(async () => {
 
 .name-text {
   font-family: "JetBrains Mono", Consolas, monospace;
+}
+
+/* AI 处理框 */
+.ai-block {
+  padding: 12px 16px;
+  background: #f0f7ff;
+  border-left: 3px solid #409eff;
+  margin-bottom: 8px;
+}
+.ai-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #303133;
+}
+.ai-item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ai-item:last-child {
+  margin-bottom: 0;
+}
+.ai-label {
+  flex-shrink: 0;
+  width: 60px;
+  color: #606266;
+  font-weight: 500;
+}
+.ai-text {
+  flex: 1;
+  color: #303133;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ai-verdict {
+  align-items: center;
+}
+.ai-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Bug 单号 */
+.bug-no-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .case-log {

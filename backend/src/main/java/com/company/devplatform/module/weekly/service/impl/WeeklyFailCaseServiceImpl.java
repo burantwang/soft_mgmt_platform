@@ -4,6 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.company.devplatform.common.ErrorCode;
 import com.company.devplatform.common.exception.BusinessException;
 import com.company.devplatform.module.release.enums.FailCaseStatus;
+import com.company.devplatform.module.release.service.AiAnalysisService;
+import com.company.devplatform.module.release.vo.AiAnalysisResult;
 import com.company.devplatform.module.weekly.dto.WeeklyFailCaseAssignDTO;
 import com.company.devplatform.module.weekly.dto.WeeklyFailCaseUpdateDTO;
 import com.company.devplatform.module.weekly.entity.WeeklyFailCase;
@@ -30,6 +32,7 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
 
     private final WeeklyFailCaseMapper failCaseMapper;
     private final WeeklyReportMapper reportMapper;
+    private final AiAnalysisService aiAnalysisService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -113,6 +116,8 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
         if (dto.getAiAnalysisCorrect() != null) {
             c.setAiAnalysisCorrect(dto.getAiAnalysisCorrect());
         }
+        c.setBugNo(dto.getBugNo());
+        c.setIssueCategory(dto.getIssueCategory());
         failCaseMapper.updateById(c);
         log.info("[WeeklySanity] 更新用例 caseId={} status={}", c.getId(), dto.getStatus());
     }
@@ -154,6 +159,23 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
         c.setAssigneeId(assigneeId);
         failCaseMapper.updateById(c);
         log.info("[WeeklySanity] 快速指派责任人 caseId={} assigneeId={}", c.getId(), assigneeId);
+    }
+
+    @Override
+    public AiAnalysisResult aiAnalyze(Long caseId) {
+        WeeklyFailCase c = failCaseMapper.selectById(caseId);
+        if (c == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用例明细不存在");
+        }
+        if (!StringUtils.hasText(c.getCaseLog())) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "该用例无执行日志，无法分析");
+        }
+        AiAnalysisResult result = aiAnalysisService.analyze(c.getCaseLog(), "weekly_sanity");
+        c.setAiRootCause(result.getRootCause());
+        c.setAiEvidence(result.getEvidence());
+        c.setAiSolution(result.getSolution());
+        failCaseMapper.updateById(c);
+        return result;
     }
 
     /* ==================== 私有方法：权限校验 ==================== */

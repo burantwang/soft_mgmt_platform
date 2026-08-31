@@ -53,6 +53,21 @@ public class WeeklyFailCase {
     /** AI分析是否正确:1是 0否 */
     private Integer aiAnalysisCorrect;
 
+    /** AI分析根因 */
+    private String aiRootCause;
+
+    /** AI分析佐证 */
+    private String aiEvidence;
+
+    /** AI解决建议 */
+    private String aiSolution;
+
+    /** Bug单号(Redmine) */
+    private String bugNo;
+
+    /** 问题分类 */
+    private String issueCategory;
+
     /** 状态:1待处理 2处理中 3已修复 4非缺陷 */
     private Integer status;
 

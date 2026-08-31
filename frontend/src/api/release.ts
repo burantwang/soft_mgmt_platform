@@ -1,13 +1,17 @@
 import { http } from '@/utils/request'
 import type { ApiResult, PageQuery, PageResult } from '@/types/api'
 import type {
+  AiConfig,
+  AiSkill,
   DashboardSummary,
   FailCaseGrouped,
   FailCaseHandleForm,
+  FailCaseMeta,
   FailCaseUpdateForm,
   FailTaskCreateForm,
   FailTaskDetailVO,
   FailTaskVO,
+  IssueCategory,
   RecentDayStat,
   ReleaseProject,
   ReleaseRecordCreateForm,
@@ -188,4 +192,59 @@ export function getRecentWeekStatsApi(): Promise<ApiResult<RecentDayStat[]>> {
 export async function getReportContentApi(fileId: number): Promise<Blob> {
   const res = await http.get<Blob>(`/release/records/reports/${fileId}/content`, {}, { responseType: 'blob' })
   return res as unknown as Blob
+}
+
+/** 失败用例元数据（问题分类列表 + Redmine 前缀） */
+export function getFailCaseMetaApi(): Promise<ApiResult<FailCaseMeta>> {
+  return http.get<FailCaseMeta>('/release/fail-cases/meta')
+}
+
+/** 新增问题分类（仅管理员） */
+export function addIssueCategoryApi(data: { categoryName: string; categoryCode?: string }): Promise<ApiResult<null>> {
+  return http.post<null>('/release/issue-categories', data)
+}
+
+/** 停用/启用问题分类（仅管理员） */
+export function updateIssueCategoryStatusApi(id: number, status: number): Promise<ApiResult<null>> {
+  return http.put<null>(`/release/issue-categories/${id}/status`, { status })
+}
+
+/** 更新 Redmine 前缀（仅管理员） */
+export function updateRedminePrefixApi(redminePrefix: string): Promise<ApiResult<null>> {
+  return http.put<null>('/release/config/redmine-prefix', { redminePrefix })
+}
+
+/** 读取 AI 配置（仅管理员） */
+export function getAiConfigApi(): Promise<ApiResult<AiConfig>> {
+  return http.get<AiConfig>('/release/config/ai')
+}
+
+/** 更新 AI 配置（仅管理员） */
+export function updateAiConfigApi(data: AiConfig): Promise<ApiResult<null>> {
+  return http.put<null>('/release/config/ai', data)
+}
+
+/** 某板块 skill 列表 */
+export function getAiSkillsApi(module: string): Promise<ApiResult<AiSkill[]>> {
+  return http.get<AiSkill[]>(`/release/skills/${module}`)
+}
+
+/** 新增 skill（仅管理员） */
+export function createAiSkillApi(module: string, data: { title: string; content: string }): Promise<ApiResult<AiSkill>> {
+  return http.post<AiSkill>(`/release/skills/${module}`, data)
+}
+
+/** 更新 skill（仅管理员） */
+export function updateAiSkillApi(docId: number, data: { title: string; content: string }): Promise<ApiResult<null>> {
+  return http.put<null>(`/release/skills/${docId}`, data)
+}
+
+/** 启用/停用 skill（仅管理员） */
+export function toggleAiSkillApi(docId: number, enabled: number): Promise<ApiResult<null>> {
+  return http.put<null>(`/release/skills/${docId}/enabled`, { enabled })
+}
+
+/** 删除 skill（仅管理员） */
+export function deleteAiSkillApi(docId: number): Promise<ApiResult<null>> {
+  return http.del<null>(`/release/skills/${docId}`)
 }

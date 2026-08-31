@@ -7,7 +7,7 @@ import type {
   WeeklyReportConfirmForm,
   WeeklyReportPreviewVO
 } from '@/types/weekly'
-import type { UserOption } from '@/types/release'
+import type { AiAnalysisResult, UserOption } from '@/types/release'
 
 /* ==================== WeeklySanity 报告上传 ==================== */
 
@@ -58,6 +58,27 @@ export function updateWeeklyFailCaseApi(id: number, data: WeeklyFailCaseUpdateFo
 /** 快速指派用例责任人（仅更新 assigneeId，立即生效） */
 export function assignWeeklyFailCaseApi(id: number, assigneeId: number | null): Promise<ApiResult<null>> {
   return http.put<null>(`/weekly/fail-cases/${id}/assign`, { assigneeId })
+}
+
+/** 触发 AI 分析失败用例（同步等待结果；AI 模型调用较慢，设置 180s 超时） */
+export function aiAnalyzeWeeklyFailCaseApi(id: number): Promise<ApiResult<AiAnalysisResult>> {
+  return http.post<AiAnalysisResult>(`/weekly/fail-cases/${id}/ai-analyze`, undefined, { timeout: 180000 })
+}
+
+/** 导出某日期全部失败用例 Excel（blob 下载） */
+export async function exportWeeklyExcelApi(date: string): Promise<void> {
+  const res = (await http.get<unknown>('/weekly/report/export', { date }, {
+    responseType: 'blob',
+    timeout: 60000
+  })) as unknown as Blob
+  const url = URL.createObjectURL(res)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `Weekly_Sanity_${date}_失败用例.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 /** 启用用户下拉（指派责任人） */

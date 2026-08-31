@@ -2,13 +2,16 @@ package com.company.devplatform.module.weekly.service;
 
 import com.company.devplatform.module.weekly.dto.WeeklyGroupedQuery;
 import com.company.devplatform.module.weekly.dto.WeeklyReportConfirmDTO;
+import com.company.devplatform.module.weekly.vo.WeeklyFailCaseExcelVO;
 import com.company.devplatform.module.weekly.vo.WeeklyGroupedVO;
 import com.company.devplatform.module.weekly.vo.WeeklyRecentDayStatVO;
 import com.company.devplatform.module.weekly.vo.WeeklyReportPreviewVO;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * WeeklySanity 周度测试报告服务
@@ -41,4 +44,11 @@ public interface WeeklyReportService {
      * 输出原始测试报告文件内容
      */
     void outputReportContent(Long fileId, HttpServletResponse response);
+
+    /**
+     * 导出某日期全部失败用例（每个项目一个 Sheet）
+     *
+     * @return sheet名 -> 用例行列表
+     */
+    Map<String, List<WeeklyFailCaseExcelVO>> exportByDate(LocalDate date);
 }

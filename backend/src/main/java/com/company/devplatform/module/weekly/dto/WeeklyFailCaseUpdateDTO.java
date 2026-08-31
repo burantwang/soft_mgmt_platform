@@ -34,4 +34,10 @@ public class WeeklyFailCaseUpdateDTO {
 
     /** AI分析是否正确:1是 0否 */
     private Integer aiAnalysisCorrect;
+
+    /** Bug单号(Redmine) */
+    private String bugNo;
+
+    /** 问题分类 */
+    private String issueCategory;
 }

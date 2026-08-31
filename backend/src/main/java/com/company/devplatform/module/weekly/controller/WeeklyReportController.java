@@ -1,10 +1,14 @@
 package com.company.devplatform.module.weekly.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.ExcelWriter;
+import com.alibaba.excel.write.metadata.WriteSheet;
 import com.company.devplatform.common.Result;
 import com.company.devplatform.module.weekly.dto.WeeklyGroupedQuery;
 import com.company.devplatform.module.weekly.dto.WeeklyReportConfirmDTO;
 import com.company.devplatform.module.weekly.service.WeeklyReportService;
+import com.company.devplatform.module.weekly.vo.WeeklyFailCaseExcelVO;
 import com.company.devplatform.module.weekly.vo.WeeklyGroupedVO;
 import com.company.devplatform.module.weekly.vo.WeeklyRecentDayStatVO;
 import com.company.devplatform.module.weekly.vo.WeeklyReportPreviewVO;
@@ -20,8 +24,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * WeeklySanity 周度测试报告接口（独立于 DailySanity，数据不共享）
@@ -69,5 +77,30 @@ public class WeeklyReportController {
     @SaCheckPermission("sonic:view")
     public void reportContent(@PathVariable Long fileId, HttpServletResponse response) {
         weeklyReportService.outputReportContent(fileId, response);
+    }
+
+    /** 导出某日期全部失败用例 Excel（每个项目一个 Sheet） */
+    @GetMapping("/report/export")
+    @SaCheckPermission("sonic:view")
+    public void export(HttpServletResponse response, @RequestParam String date) throws IOException {
+        LocalDate d = LocalDate.parse(date);
+        Map<String, List<WeeklyFailCaseExcelVO>> data = weeklyReportService.exportByDate(d);
+        String fileName = "Weekly_Sanity_" + date + "_失败用例.xlsx";
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
+        ExcelWriter writer = EasyExcel.write(response.getOutputStream(), WeeklyFailCaseExcelVO.class).build();
+        int idx = 0;
+        for (Map.Entry<String, List<WeeklyFailCaseExcelVO>> e : data.entrySet()) {
+            WriteSheet sheet = EasyExcel.writerSheet(idx++, sanitizeSheetName(e.getKey())).build();
+            writer.write(e.getValue(), sheet);
+        }
+        writer.finish();
+    }
+
+    private String sanitizeSheetName(String name) {
+        String s = name == null ? "" : name.replaceAll("[\\\\/:*?\\[\\]]", "_");
+        return s.length() > 31 ? s.substring(0, 31) : s;
     }
 }
