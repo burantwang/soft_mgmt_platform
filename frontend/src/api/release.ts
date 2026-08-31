@@ -1,6 +1,8 @@
 import { http } from '@/utils/request'
 import type { ApiResult, PageQuery, PageResult } from '@/types/api'
+import type { MyTaskCase } from '@/types/mytask'
 import type {
+  AiAnalysisResult,
   AiConfig,
   AiSkill,
   DashboardSummary,
@@ -183,9 +185,19 @@ export function assignFailCaseApi(id: number, assigneeId: number | null): Promis
   return http.put<null>(`/release/fail-cases/${id}/assign`, { assigneeId })
 }
 
+/** 触发 AI 分析失败用例（同步等待结果；AI 模型调用较慢，设置 180s 超时） */
+export function aiAnalyzeDailyFailCaseApi(id: number): Promise<ApiResult<AiAnalysisResult>> {
+  return http.post<AiAnalysisResult>(`/release/fail-cases/${id}/ai-analyze`, undefined, { timeout: 180000 })
+}
+
 /** 最近7天 DailySanity 分析完成统计 */
 export function getRecentWeekStatsApi(): Promise<ApiResult<RecentDayStat[]>> {
   return http.get<RecentDayStat[]>('/release/fail-cases/recent-week-stats')
+}
+
+/** 个人任务：当前用户被指派的 Daily 失败用例（scope=active 仅未完成，all 含全部） */
+export function getMyDailyCasesApi(scope: 'active' | 'all'): Promise<ApiResult<MyTaskCase[]>> {
+  return http.get<MyTaskCase[]>('/release/fail-cases/mine', { scope })
 }
 
 /** 获取原始测试报告文件内容（返回 Blob，用于新窗口打开） */

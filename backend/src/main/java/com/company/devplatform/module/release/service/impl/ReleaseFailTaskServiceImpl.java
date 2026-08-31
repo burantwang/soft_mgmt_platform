@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.devplatform.common.ErrorCode;
 import com.company.devplatform.common.exception.BusinessException;
+import com.company.devplatform.common.vo.MyTaskCaseVO;
 import com.company.devplatform.module.auth.entity.SysUser;
 import com.company.devplatform.module.auth.mapper.SysUserMapper;
 import com.company.devplatform.module.release.dto.FailCaseAssignDTO;
@@ -31,8 +32,10 @@ import com.company.devplatform.module.release.mapper.ReleaseFailTaskMapper;
 import com.company.devplatform.module.release.mapper.ReleaseProjectMapper;
 import com.company.devplatform.module.release.mapper.ReleaseRecordMapper;
 import com.company.devplatform.module.release.mapper.ReleaseRecordProjectMapper;
+import com.company.devplatform.module.release.service.AiAnalysisService;
 import com.company.devplatform.module.release.service.ReleaseFailTaskService;
 import com.company.devplatform.module.release.util.HtmlReportParser;
+import com.company.devplatform.module.release.vo.AiAnalysisResult;
 import com.company.devplatform.module.release.vo.FailCaseGroupedVO;
 import com.company.devplatform.module.release.vo.FailCaseVO;
 import com.company.devplatform.module.release.vo.FailTaskDetailVO;
@@ -78,6 +81,7 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
     private final ReleaseProjectMapper projectMapper;
     private final SysUserMapper userMapper;
     private final FileResourceMapper fileResourceMapper;
+    private final AiAnalysisService aiAnalysisService;
 
     /* ==================== 阶段2：自动创建 ==================== */
 
@@ -640,6 +644,73 @@ public class ReleaseFailTaskServiceImpl implements ReleaseFailTaskService {
         caseMapper.updateById(c);
         refreshTaskStatus(task.getId());
         log.info("[失败任务] 快速指派责任人 taskNo={} caseId={} assigneeId={}", task.getTaskNo(), c.getId(), assigneeId);
+    }
+
+    @Override
+    public List<MyTaskCaseVO> listMyCases(boolean all) {
+        long current = currentUserId();
+        LambdaQueryWrapper<ReleaseFailCase> cw = new LambdaQueryWrapper<ReleaseFailCase>()
+                .eq(ReleaseFailCase::getAssigneeId, current);
+        if (!all) {
+            cw.in(ReleaseFailCase::getStatus, FailCaseStatus.PENDING.getCode(), FailCaseStatus.PROCESSING.getCode());
+        }
+        cw.orderByDesc(ReleaseFailCase::getId);
+        List<ReleaseFailCase> cases = caseMapper.selectList(cw);
+        if (CollectionUtils.isEmpty(cases)) {
+            return new ArrayList<>();
+        }
+
+        // 关联失败任务与发布记录，补齐分支/版本/机型/时间等来源信息
+        Set<Long> taskIds = cases.stream().map(ReleaseFailCase::getTaskId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, ReleaseFailTask> taskMap = taskIds.isEmpty() ? Collections.emptyMap()
+                : taskMapper.selectBatchIds(taskIds).stream()
+                        .collect(Collectors.toMap(ReleaseFailTask::getId, Function.identity()));
+        Set<Long> recordIds = taskMap.values().stream().map(ReleaseFailTask::getRecordId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, ReleaseRecord> recordMap = recordIds.isEmpty() ? Collections.emptyMap()
+                : recordMapper.selectBatchIds(recordIds).stream()
+                        .collect(Collectors.toMap(ReleaseRecord::getId, Function.identity()));
+        Map<Long, List<String>> projectMap = buildRecordProjectMap(recordIds);
+
+        return cases.stream().map(c -> {
+            MyTaskCaseVO vo = new MyTaskCaseVO();
+            BeanUtils.copyProperties(c, vo);
+            vo.setBoard("daily");
+            FailCaseStatus st = FailCaseStatus.of(c.getStatus());
+            vo.setStatusDesc(st == null ? null : st.getDesc());
+            vo.setCaseTypeDesc("error".equals(c.getCaseType()) ? "错误" : "失败");
+            ReleaseFailTask t = taskMap.get(c.getTaskId());
+            if (t != null) {
+                vo.setTaskNo(t.getTaskNo());
+                ReleaseRecord r = recordMap.get(t.getRecordId());
+                if (r != null) {
+                    vo.setBranch(r.getBranch());
+                    vo.setVersion(r.getVersion());
+                    vo.setPublishTime(r.getPublishTime());
+                    List<String> names = projectMap.getOrDefault(r.getId(), Collections.emptyList());
+                    vo.setProjectName(names.isEmpty() ? null : String.join(", ", names));
+                }
+            }
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public AiAnalysisResult aiAnalyze(Long caseId) {
+        ReleaseFailCase c = caseMapper.selectById(caseId);
+        if (c == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用例明细不存在");
+        }
+        if (!StringUtils.hasText(c.getCaseLog())) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "该用例无执行日志，无法分析");
+        }
+        AiAnalysisResult result = aiAnalysisService.analyze(c.getCaseLog(), "daily_sanity");
+        c.setAiRootCause(result.getRootCause());
+        c.setAiEvidence(result.getEvidence());
+        c.setAiSolution(result.getSolution());
+        caseMapper.updateById(c);
+        return result;
     }
 
     @Override

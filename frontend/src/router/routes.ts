@@ -70,7 +70,7 @@ export const routes: RouteRecordRaw[] = [
             path: 'mine',
             name: 'MyTask',
             component: () => import('@/pages/task/mine.vue'),
-            meta: { title: '我的待办', icon: 'List', hidden: true }
+            meta: { title: '个人任务', icon: 'List' }
           }
         ]
       },

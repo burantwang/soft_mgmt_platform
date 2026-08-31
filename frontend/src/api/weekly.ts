@@ -1,5 +1,6 @@
 import { http } from '@/utils/request'
 import type { ApiResult } from '@/types/api'
+import type { MyTaskCase } from '@/types/mytask'
 import type {
   WeeklyFailCaseGrouped,
   WeeklyFailCaseUpdateForm,
@@ -40,6 +41,11 @@ export function getWeeklyGroupedCasesApi(params: {
 /** 最近7天分析完成统计 */
 export function getWeeklyRecentWeekStatsApi(): Promise<ApiResult<WeeklyRecentDayStat[]>> {
   return http.get<WeeklyRecentDayStat[]>('/weekly/report/recent-week-stats')
+}
+
+/** 个人任务：当前用户被指派的 Weekly 失败用例（scope=active 仅未完成，all 含全部） */
+export function getMyWeeklyCasesApi(scope: 'active' | 'all'): Promise<ApiResult<MyTaskCase[]>> {
+  return http.get<MyTaskCase[]>('/weekly/fail-cases/mine', { scope })
 }
 
 /** 获取原始测试报告文件内容（返回 Blob，用于新窗口打开） */

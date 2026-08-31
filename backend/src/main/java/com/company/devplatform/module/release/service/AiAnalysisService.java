@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI 分析服务：调用 OpenAI 兼容接口（chat/completions），将脚本执行记录交由 AI 分析
@@ -123,13 +125,74 @@ public class AiAnalysisService {
             result.setSolution(textOf(node, "solution"));
             return result;
         } catch (Exception e) {
-            log.warn("[AI分析] 解析 JSON 失败，将原文作为根因 content={}", content);
-            AiAnalysisResult result = new AiAnalysisResult();
-            result.setRootCause(content);
-            result.setEvidence("");
-            result.setSolution("");
+            log.warn("[AI分析] 解析 JSON 失败，尝试按 Markdown 标题拆分 content={}", truncate(content, 200));
+            AiAnalysisResult result = splitByMarkdown(content);
+            if (!StringUtils.hasText(result.getEvidence()) && !StringUtils.hasText(result.getSolution())) {
+                log.warn("[AI分析] Markdown 标题拆分未命中，将原文作为根因");
+            }
             return result;
         }
+    }
+
+    /**
+     * 兜底解析：AI 未按要求返回 JSON 时，尝试按 Markdown 标题（如 {@code ### 1. AI根因分析}）
+     * 拆分根因 / 佐证 / 修复建议三段；完全识别不出标题时退回全部作为根因。
+     */
+    private AiAnalysisResult splitByMarkdown(String content) {
+        AiAnalysisResult result = new AiAnalysisResult();
+        StringBuilder root = new StringBuilder();
+        StringBuilder evidence = new StringBuilder();
+        StringBuilder solution = new StringBuilder();
+        String current = "root";
+        boolean sectioned = false;
+        for (String line : content.split("\\r?\\n")) {
+            String t = line.trim();
+            Matcher m = Pattern.compile("^#{1,4}\\s+([^\\n]+)$").matcher(t);
+            if (m.matches()) {
+                String title = m.group(1).replaceFirst("^\\d+[.)]?\\s*", "").trim().toLowerCase();
+                if (title.contains("根因") || title.contains("原因") || title.contains("root")) {
+                    current = "root";
+                } else if (title.contains("佐证") || title.contains("证据") || title.contains("evidence")) {
+                    current = "evidence";
+                } else if (title.contains("建议") || title.contains("解决") || title.contains("方案")
+                        || title.contains("修复") || title.contains("修正") || title.contains("solution")) {
+                    current = "solution";
+                } else {
+                    // 无法归类的标题：无任何板块标题时归根因，否则归佐证（视为分析依据）
+                    current = sectioned ? "evidence" : "root";
+                }
+                sectioned = true;
+                continue;
+            }
+            StringBuilder target;
+            if ("evidence".equals(current)) {
+                target = evidence;
+            } else if ("solution".equals(current)) {
+                target = solution;
+            } else {
+                target = root;
+            }
+            target.append(line).append("\n");
+        }
+        if (sectioned) {
+            result.setRootCause(root.toString().trim());
+            result.setEvidence(evidence.toString().trim());
+            result.setSolution(solution.toString().trim());
+        } else {
+            // 未识别出任何标题：保持原兜底行为，全部作为根因
+            result.setRootCause(content.trim());
+            result.setEvidence("");
+            result.setSolution("");
+        }
+        return result;
+    }
+
+    /** 截断超长文本用于日志打印 */
+    private String truncate(String s, int maxLen) {
+        if (s == null || s.length() <= maxLen) {
+            return s;
+        }
+        return s.substring(0, maxLen) + "...";
     }
 
     private String textOf(JsonNode node, String field) {

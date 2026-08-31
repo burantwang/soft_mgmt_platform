@@ -1,9 +1,13 @@
 package com.company.devplatform.module.weekly.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.devplatform.common.ErrorCode;
 import com.company.devplatform.common.exception.BusinessException;
+import com.company.devplatform.common.vo.MyTaskCaseVO;
+import com.company.devplatform.module.release.entity.ReleaseProject;
 import com.company.devplatform.module.release.enums.FailCaseStatus;
+import com.company.devplatform.module.release.mapper.ReleaseProjectMapper;
 import com.company.devplatform.module.release.service.AiAnalysisService;
 import com.company.devplatform.module.release.vo.AiAnalysisResult;
 import com.company.devplatform.module.weekly.dto.WeeklyFailCaseAssignDTO;
@@ -15,11 +19,20 @@ import com.company.devplatform.module.weekly.mapper.WeeklyReportMapper;
 import com.company.devplatform.module.weekly.service.WeeklyFailCaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * WeeklySanity 失败用例处理服务实现
@@ -32,6 +45,7 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
 
     private final WeeklyFailCaseMapper failCaseMapper;
     private final WeeklyReportMapper reportMapper;
+    private final ReleaseProjectMapper projectMapper;
     private final AiAnalysisService aiAnalysisService;
 
     @Override
@@ -176,6 +190,51 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
         c.setAiSolution(result.getSolution());
         failCaseMapper.updateById(c);
         return result;
+    }
+
+    @Override
+    public List<MyTaskCaseVO> listMyCases(boolean all) {
+        long current = currentUserId();
+        LambdaQueryWrapper<WeeklyFailCase> cw = new LambdaQueryWrapper<WeeklyFailCase>()
+                .eq(WeeklyFailCase::getAssigneeId, current);
+        if (!all) {
+            cw.in(WeeklyFailCase::getStatus, FailCaseStatus.PENDING.getCode(), FailCaseStatus.PROCESSING.getCode());
+        }
+        cw.orderByDesc(WeeklyFailCase::getId);
+        List<WeeklyFailCase> cases = failCaseMapper.selectList(cw);
+        if (CollectionUtils.isEmpty(cases)) {
+            return new ArrayList<>();
+        }
+
+        // 关联周度报告与机型，补齐分支/版本/模块/机型/时间等来源信息
+        Set<Long> reportIds = cases.stream().map(WeeklyFailCase::getReportId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, WeeklyReport> reportMap = reportIds.isEmpty() ? Collections.emptyMap()
+                : reportMapper.selectBatchIds(reportIds).stream()
+                        .collect(Collectors.toMap(WeeklyReport::getId, Function.identity()));
+        Set<Long> projectIds = reportMap.values().stream().map(WeeklyReport::getProjectId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> projectNameMap = projectIds.isEmpty() ? Collections.emptyMap()
+                : projectMapper.selectBatchIds(projectIds).stream()
+                        .collect(Collectors.toMap(ReleaseProject::getId, ReleaseProject::getProjectName));
+
+        return cases.stream().map(c -> {
+            MyTaskCaseVO vo = new MyTaskCaseVO();
+            BeanUtils.copyProperties(c, vo);
+            vo.setBoard("weekly");
+            FailCaseStatus st = FailCaseStatus.of(c.getStatus());
+            vo.setStatusDesc(st == null ? null : st.getDesc());
+            vo.setCaseTypeDesc("error".equals(c.getCaseType()) ? "错误" : "失败");
+            WeeklyReport r = reportMap.get(c.getReportId());
+            if (r != null) {
+                vo.setBranch(r.getBranch());
+                vo.setVersion(r.getVersion());
+                vo.setModuleName(r.getModuleName());
+                vo.setProjectName(projectNameMap.get(r.getProjectId()));
+                vo.setPublishTime(r.getPublishTime());
+            }
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     /* ==================== 私有方法：权限校验 ==================== */

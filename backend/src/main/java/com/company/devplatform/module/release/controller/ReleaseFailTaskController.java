@@ -3,6 +3,7 @@ package com.company.devplatform.module.release.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.company.devplatform.common.Result;
+import com.company.devplatform.common.vo.MyTaskCaseVO;
 import com.company.devplatform.module.release.dto.FailCaseAssignDTO;
 import com.company.devplatform.module.release.dto.FailCaseGroupedQuery;
 import com.company.devplatform.module.release.dto.FailCaseHandleDTO;
@@ -13,6 +14,7 @@ import com.company.devplatform.module.release.dto.FailTaskStatusDTO;
 import com.company.devplatform.module.release.dto.FailTaskUpdateDTO;
 import com.company.devplatform.module.release.entity.ReleaseFailTask;
 import com.company.devplatform.module.release.service.ReleaseFailTaskService;
+import com.company.devplatform.module.release.vo.AiAnalysisResult;
 import com.company.devplatform.module.release.vo.FailCaseGroupedVO;
 import com.company.devplatform.module.release.vo.FailTaskDetailVO;
 import com.company.devplatform.module.release.vo.FailTaskVO;
@@ -143,11 +145,25 @@ public class ReleaseFailTaskController {
         return Result.ok(failTaskService.recentWeekStats());
     }
 
+    /** 个人任务：当前用户被指派的 Daily 失败用例（scope=active 仅未完成，all 含全部） */
+    @GetMapping("/fail-cases/mine")
+    @SaCheckPermission("sonic:view")
+    public Result<List<MyTaskCaseVO>> myCases(@RequestParam(defaultValue = "active") String scope) {
+        return Result.ok(failTaskService.listMyCases("all".equals(scope)));
+    }
+
     /** 快速指派用例责任人（仅更新 assigneeId，立即生效） */
     @PutMapping("/fail-cases/{caseId}/assign")
     @SaCheckPermission("sonic:view")
     public Result<Void> assignCase(@PathVariable Long caseId, @Valid @RequestBody FailCaseAssignDTO dto) {
         failTaskService.assignCaseAssignee(caseId, dto);
         return Result.ok();
+    }
+
+    /** 触发 AI 分析失败用例（同步等待结果，回写根因/佐证/修复建议） */
+    @PostMapping("/fail-cases/{caseId}/ai-analyze")
+    @SaCheckPermission("sonic:view")
+    public Result<AiAnalysisResult> aiAnalyze(@PathVariable Long caseId) {
+        return Result.ok(failTaskService.aiAnalyze(caseId));
     }
 }

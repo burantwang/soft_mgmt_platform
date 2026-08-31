@@ -185,195 +185,15 @@
             <el-button size="small" text @click="resetGroupFilter(group)">重置</el-button>
           </div>
 
-          <el-table
-            :data="visibleCases(group)"
-            border
-            stripe
-            size="small"
-            class="case-table"
-            :expand-on-click-row="false"
-            :row-class-name="rowClassName"
-            @expand-change="onExpandChange"
-          >
-            <el-table-column type="expand" width="45">
-              <template #default="{ row }">
-                <div class="ai-block">
-                  <div class="ai-title">AI 分析</div>
-                  <template v-if="row.aiRootCause || row.aiEvidence || row.aiSolution">
-                    <div class="ai-item">
-                      <span class="ai-label">根因</span>
-                      <div class="ai-text">{{ row.aiRootCause || '暂无' }}</div>
-                    </div>
-                    <div class="ai-item">
-                      <span class="ai-label">佐证</span>
-                      <div class="ai-text">{{ row.aiEvidence || '暂无' }}</div>
-                    </div>
-                    <div class="ai-item">
-                      <span class="ai-label">解决建议</span>
-                      <div class="ai-text">{{ row.aiSolution || '暂无' }}</div>
-                    </div>
-                    <div class="ai-item ai-verdict">
-                      <span class="ai-label">分析判断</span>
-                      <el-select
-                        v-model="editing[toCase(row).id].aiAnalysisCorrect"
-                        placeholder=""
-                        :disabled="fieldDisabled(toCase(row), 'aiAnalysisCorrect')"
-                        style="width: 90px"
-                      >
-                        <el-option label="Y" :value="1" />
-                        <el-option label="N" :value="0" />
-                      </el-select>
-                    </div>
-                  </template>
-                  <template v-else>
-                    <div class="ai-empty">
-                      <el-button
-                        type="primary"
-                        size="small"
-                        :loading="aiLoading[toCase(row).id]"
-                        @click="triggerAiAnalyze(toCase(row))"
-                      >启用 AI 分析</el-button>
-                    </div>
-                  </template>
-                </div>
-                <div class="case-log">
-                  <div class="log-title">用例运行日志</div>
-                  <pre v-if="row.caseLog" class="log-content">{{ row.caseLog }}</pre>
-                  <span v-else class="text-muted">无日志</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="模块 / 失败脚本" min-width="240" show-overflow-tooltip>
-              <template #default="{ row }">
-                <div class="case-name">
-                  <el-tag size="small" :type="row.caseType === 'error' ? 'danger' : 'warning'">{{ row.caseTypeDesc }}</el-tag>
-                  <span class="name-text">{{ row.caseName }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="失败原因" min-width="200">
-              <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
-                  <div>
-                    <ResizeTipTextarea
-                      v-if="isExpanded(toCase(row).id)"
-                      :key="`fr-on-${toCase(row).id}`"
-                      v-model="editing[toCase(row).id].failReason"
-                      :autosize="{ minRows: 1, maxRows: 200 }"
-                      placeholder="填写失败原因"
-                      :disabled="fieldDisabled(toCase(row), 'failReason')"
-                    />
-                    <ResizeTipTextarea
-                      v-else
-                      :key="`fr-off-${toCase(row).id}`"
-                      v-model="editing[toCase(row).id].failReason"
-                      :autosize="{ minRows: 1, maxRows: 2 }"
-                      placeholder="填写失败原因"
-                      :disabled="fieldDisabled(toCase(row), 'failReason')"
-                    />
-                  </div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="结论进展" min-width="200">
-              <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
-                  <div>
-                    <ResizeTipTextarea
-                      v-if="isExpanded(toCase(row).id)"
-                      :key="`pr-on-${toCase(row).id}`"
-                      v-model="editing[toCase(row).id].progress"
-                      :autosize="{ minRows: 1, maxRows: 200 }"
-                      placeholder="填写分析进展与结论"
-                      :disabled="fieldDisabled(toCase(row), 'progress')"
-                    />
-                    <ResizeTipTextarea
-                      v-else
-                      :key="`pr-off-${toCase(row).id}`"
-                      v-model="editing[toCase(row).id].progress"
-                      :autosize="{ minRows: 1, maxRows: 2 }"
-                      placeholder="填写分析进展与结论"
-                      :disabled="fieldDisabled(toCase(row), 'progress')"
-                    />
-                  </div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="问题分类" width="130" align="center">
-              <template #default="{ row }">
-                <el-select
-                  v-model="editing[toCase(row).id].issueCategory"
-                  placeholder="选择"
-                  clearable
-                  :disabled="fieldDisabled(toCase(row), 'failReason')"
-                  style="width: 110px"
-                >
-                  <el-option v-for="c in categories" :key="c.id" :label="c.categoryName" :value="c.categoryName" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="Bug单号" width="130" align="center">
-              <template #default="{ row }">
-                <div class="bug-no-cell">
-                  <el-input
-                    v-model="editing[toCase(row).id].bugNo"
-                    placeholder=""
-                    :disabled="fieldDisabled(toCase(row), 'failReason')"
-                    style="width: 80px"
-                  />
-                  <el-button
-                    v-if="editing[toCase(row).id].bugNo"
-                    link
-                    type="primary"
-                    size="small"
-                    @click="jumpToBug(editing[toCase(row).id].bugNo)"
-                  >跳转</el-button>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="责任人" width="140" align="center">
-              <template #default="{ row }">
-                <el-tooltip :content="assignDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''" placement="top" :disabled="!assignDisabled(toCase(row))">
-                  <el-select
-                    v-model="editing[toCase(row).id].assigneeId"
-                    placeholder="选择"
-                    clearable
-                    :disabled="assignDisabled(toCase(row))"
-                    :loading="saving[toCase(row).id]"
-                    @change="quickAssign(toCase(row), $event)"
-                  >
-                    <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname || u.username" :value="u.id" />
-                  </el-select>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="120" align="center">
-              <template #default="{ row }">
-                <el-tooltip :content="fieldDisabledTip(toCase(row), 'status')" placement="top" :disabled="!fieldDisabled(toCase(row), 'status')">
-                  <div :class="['status-cell', statusClass(editing[(toCase(row)).id].status)]">
-                    <el-select
-                      v-model="editing[(toCase(row)).id].status"
-                      placeholder="状态"
-                      :disabled="fieldDisabled(toCase(row), 'status')"
-                      class="status-select"
-                    >
-                      <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
-                      <el-option key="closed" label="已关闭" :value="5" :disabled="!isAdmin" />
-                    </el-select>
-                  </div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="90" align="center" fixed="right">
-              <template #default="{ row }">
-                <el-tooltip :content="saveDisabledTip(toCase(row))" placement="top" :disabled="!saveDisabled(toCase(row))">
-                  <div>
-                    <el-button type="primary" size="small" :loading="saving[toCase(row).id]" :disabled="saveDisabled(toCase(row))" @click="saveCase(toCase(row))">保存</el-button>
-                  </div>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-          </el-table>
+          <FailCaseEditTable
+            :rows="visibleCases(group)"
+            board="weekly"
+            :user-options="userOptions"
+            :categories="categories"
+            :redmine-prefix="redminePrefix"
+            :is-admin="isAdmin"
+            @updated="loadData"
+          />
         </el-collapse-item>
       </el-collapse>
     </el-card>
@@ -537,16 +357,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import {
-  aiAnalyzeWeeklyFailCaseApi,
-  assignWeeklyFailCaseApi,
   confirmWeeklyReportApi,
   exportWeeklyExcelApi,
   getWeeklyEnabledUsersApi,
   getWeeklyGroupedCasesApi,
   getWeeklyRecentWeekStatsApi,
   getWeeklyReportContentApi,
-  previewWeeklyReportApi,
-  updateWeeklyFailCaseApi
+  previewWeeklyReportApi
 } from '@/api/weekly'
 import {
   addIssueCategoryApi,
@@ -565,16 +382,15 @@ import {
 import type {
   WeeklyFailCase,
   WeeklyFailCaseGrouped,
-  WeeklyFailCaseUpdateForm,
   WeeklyRecentDayStat,
   WeeklyReportPreviewVO
 } from '@/types/weekly'
-import type { AiAnalysisResult, AiConfig, AiSkill, IssueCategory, ReleaseProject, UserOption } from '@/types/release'
+import type { AiConfig, AiSkill, IssueCategory, ReleaseProject, UserOption } from '@/types/release'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { useUserStore } from '@/store/user'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
-import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
+import FailCaseEditTable from '@/components/FailCaseEditTable.vue'
 
 const userStore = useUserStore()
 
@@ -590,7 +406,6 @@ const groups = ref<WeeklyFailCaseGrouped[]>([])
 const activeNames = ref<string[]>([])
 const userOptions = ref<UserOption[]>([])
 const weekStats = ref<WeeklyRecentDayStat[]>([])
-const saving = reactive<Record<number, boolean>>({})
 
 // 失败用例元数据：问题分类 + Redmine 前缀
 const categories = ref<IssueCategory[]>([])
@@ -601,8 +416,6 @@ const newCategoryName = ref('')
 // Redmine 前缀配置弹窗（仅管理员）
 const prefixDialogVisible = ref(false)
 const prefixInput = ref('')
-// AI 分析加载状态
-const aiLoading = reactive<Record<number, boolean>>({})
 // AI 配置弹窗（仅管理员）
 const aiConfigDialogVisible = ref(false)
 const aiConfigForm = reactive<AiConfig>({ baseUrl: '', apiKey: '', model: '' })
@@ -629,15 +442,6 @@ const search = reactive({
   caseName: ''
 })
 
-const statusOptions = [
-  { value: 1, label: '待处理' },
-  { value: 2, label: '处理中' },
-  { value: 3, label: '已修复' },
-  { value: 4, label: '非缺陷' }
-]
-
-const editing = reactive<Record<number, WeeklyFailCaseUpdateForm>>({})
-
 /** 每个分组（分支×机型）模块执行统计的展开状态（默认折叠） */
 const moduleExpanded = reactive<Record<string, boolean>>({})
 
@@ -662,28 +466,6 @@ const statusFilterOptions = [
   { value: 99, label: '已修复(含非缺陷)' },
   { value: 4, label: '非缺陷' }
 ]
-
-/** 将 el-table 插槽的 DefaultRow 转换为强类型用例对象 */
-function toCase(row: any): WeeklyFailCase {
-  return row as WeeklyFailCase
-}
-
-/** 行展开状态：用于让行内长文本栏位（失败原因/结论进展/AI 分析）按内容自适应撑高 */
-const expandedRowIds = ref<Set<number>>(new Set())
-
-/** 判断某行是否处于展开状态 */
-function isExpanded(id: number): boolean {
-  return expandedRowIds.value.has(id)
-}
-
-/** el-table expand 事件：把当前所有展开行同步到 expandedRowIds */
-function onExpandChange(_row: WeeklyFailCase, expandedRows: WeeklyFailCase[] | boolean) {
-  if (Array.isArray(expandedRows)) {
-    expandedRowIds.value = new Set(expandedRows.map((r) => r.id))
-  } else {
-    expandedRowIds.value = new Set()
-  }
-}
 
 function groupKey(group: WeeklyFailCaseGrouped) {
   return `${group.branch}@@${group.projectName}`
@@ -716,71 +498,6 @@ function visibleCases(group: WeeklyFailCaseGrouped): WeeklyFailCase[] {
   })
 }
 
-/** 当前行责任人是当前登录用户 */
-function isMyCase(row: WeeklyFailCase): boolean {
-  return row.assigneeId != null && row.assigneeId === userStore.userInfo?.id
-}
-
-/** 普通用户是否有权操作该行（责任人是自己；管理员不受限；已关闭仅管理员可操作） */
-function canOperate(row: WeeklyFailCase): boolean {
-  if (isAdmin.value) return true
-  if (row.status === 5) return false
-  return isMyCase(row)
-}
-
-/** 责任人下拉是否禁用：普通用户不能操作他人责任行；已关闭仅管理员可操作 */
-function assignDisabled(row: WeeklyFailCase): boolean {
-  if (isAdmin.value) return false
-  if (row.status === 5) return true
-  return row.assigneeId != null && row.assigneeId !== userStore.userInfo?.id
-}
-
-/** 状态栏位前置条件：失败原因、结论进展、AI分析判断(Y/N)均已填写 */
-function statusReady(row: WeeklyFailCase): boolean {
-  const f = editing[row.id]
-  if (!f) return false
-  const reason = f.failReason?.trim()
-  const progress = f.progress?.trim()
-  const aiOk = f.aiAnalysisCorrect === 1 || f.aiAnalysisCorrect === 0
-  return !!(reason && progress && aiOk)
-}
-
-type GuardField = 'failReason' | 'progress' | 'status' | 'aiAnalysisCorrect'
-
-/** 是否禁用指定栏位（普通用户仅可编辑责任人是自己的行，管理员豁免） */
-function fieldDisabled(row: WeeklyFailCase, field: GuardField): boolean {
-  if (isAdmin.value) return false
-  if (!canOperate(row)) return true
-  if (field === 'status') return !statusReady(row)
-  return false
-}
-
-function fieldDisabledTip(row: WeeklyFailCase, field: GuardField): string {
-  if (isAdmin.value) return ''
-  if (row.status === 5) return '已关闭用例仅可查看'
-  if (!canOperate(row)) return '仅责任人为自己的问题单可操作'
-  if (field === 'status') return '请完成所有信息后再更新'
-  return ''
-}
-
-/** 保存按钮：普通用户仅责任人是自己的行可保存 */
-function saveDisabled(row: WeeklyFailCase): boolean {
-  return !isAdmin.value && !canOperate(row)
-}
-
-function saveDisabledTip(row: WeeklyFailCase): string {
-  if (isAdmin.value) return ''
-  if (row.status === 5) return '已关闭用例仅可查看'
-  return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
-}
-
-/** 状态栏位样式类名 */
-function statusClass(status: number | undefined): string {
-  if (status === 2) return 'status-processing'
-  if (status === 3 || status === 4) return 'status-fixed'
-  return ''
-}
-
 /** 分组状态统计：待处理/处理中/已修复(含非缺陷)/分析完成率 */
 function groupStatusStats(group: WeeklyFailCaseGrouped) {
   const cases = group.cases
@@ -807,24 +524,6 @@ async function openModuleReport(fileId: number) {
   }
 }
 
-function toEditingForm(item: WeeklyFailCase): WeeklyFailCaseUpdateForm {
-  // 结论进展栏位合并展示，以 progress 为主、conclusion 兜底（兼容历史数据），
-  // 不再拼接两个字段，避免重复保存导致内容翻倍
-  const merged = item.progress || item.conclusion || ''
-  return {
-    status: item.status,
-    assigneeId: item.assigneeId,
-    failReason: item.failReason || '',
-    fixPlan: item.fixPlan || '',
-    isBug: item.isBug ?? 0,
-    aiAnalysisCorrect: item.aiAnalysisCorrect,
-    progress: merged,
-    conclusion: merged,
-    bugNo: item.bugNo || '',
-    issueCategory: item.issueCategory || ''
-  }
-}
-
 async function loadUsers() {
   try {
     const res = await getWeeklyEnabledUsersApi()
@@ -843,12 +542,6 @@ async function loadMeta() {
   } catch (e) {
     // ignore
   }
-}
-
-/** 打开 Redmine Bug 界面 */
-function jumpToBug(bugNo?: string) {
-  if (!bugNo) return
-  window.open(`${redminePrefix.value || ''}${bugNo}`, '_blank')
 }
 
 /** 新增问题分类（仅管理员） */
@@ -900,25 +593,6 @@ async function savePrefix() {
     prefixDialogVisible.value = false
   } catch {
     // ignore
-  }
-}
-
-/** 触发 AI 分析失败用例 */
-async function triggerAiAnalyze(row: WeeklyFailCase) {
-  aiLoading[row.id] = true
-  try {
-    const res = await aiAnalyzeWeeklyFailCaseApi(row.id)
-    const r = res.data
-    if (r) {
-      row.aiRootCause = r.rootCause
-      row.aiEvidence = r.evidence
-      row.aiSolution = r.solution
-    }
-    ElMessage.success('AI 分析完成')
-  } catch {
-    // 错误提示已在请求拦截器统一处理
-  } finally {
-    aiLoading[row.id] = false
   }
 }
 
@@ -1075,14 +749,6 @@ async function loadData() {
     })
     groups.value = res.data || []
     activeNames.value = groups.value.map(groupKey)
-
-    // 初始化编辑态
-    Object.keys(editing).forEach((k) => delete editing[Number(k)])
-    groups.value.forEach((g) => {
-      g.cases.forEach((c) => {
-        editing[c.id] = toEditingForm(c)
-      })
-    })
   } finally {
     loading.value = false
   }
@@ -1106,51 +772,6 @@ async function handleExport() {
     // 错误提示已在请求拦截器统一处理
   } finally {
     exporting.value = false
-  }
-}
-
-/** 快速指派责任人：下拉选择即保存生效，无需点击保存按钮 */
-async function quickAssign(row: WeeklyFailCase, val: number | string | undefined) {
-  const assigneeId = val == null || val === '' ? null : Number(val)
-  if (assigneeId === row.assigneeId) return
-  // 普通用户预校验：未指派仅可认领给自己；不能取消指派（管理员不受限）
-  if (!isAdmin.value) {
-    if (row.assigneeId == null && assigneeId !== userStore.userInfo?.id) {
-      editing[row.id].assigneeId = row.assigneeId
-      ElMessage.warning('未指派用例仅可认领给自己')
-      return
-    }
-    if (assigneeId == null) {
-      editing[row.id].assigneeId = row.assigneeId
-      ElMessage.warning('不能取消指派，请转派给其他责任人')
-      return
-    }
-  }
-  saving[row.id] = true
-  try {
-    await assignWeeklyFailCaseApi(row.id, assigneeId)
-    row.assigneeId = assigneeId ?? undefined
-    ElMessage.success(assigneeId == null ? '已取消指派' : '指派成功')
-  } catch {
-    // 接口失败时回滚下拉显示值，错误信息由拦截器统一提示
-    editing[row.id].assigneeId = row.assigneeId
-  } finally {
-    saving[row.id] = false
-  }
-}
-
-async function saveCase(row: WeeklyFailCase) {
-  const form = editing[row.id]
-  // 结论进展栏位合并展示 progress+conclusion，保存时两字段保持一致，
-  // 避免删除栏位内容后，残留的 conclusion 旧值在下一次加载时又被合并回流
-  form.conclusion = form.progress
-  saving[row.id] = true
-  try {
-    await updateWeeklyFailCaseApi(row.id, form)
-    ElMessage.success('保存成功')
-    await loadData()
-  } finally {
-    saving[row.id] = false
   }
 }
 
