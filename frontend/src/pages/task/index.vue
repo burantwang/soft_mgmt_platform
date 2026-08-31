@@ -138,6 +138,7 @@
             size="small"
             class="case-table"
             :expand-on-click-row="false"
+            :row-class-name="rowClassName"
             @expand-change="onExpandChange"
           >
             <el-table-column type="expand" width="45">
@@ -232,6 +233,7 @@
                       class="status-select"
                     >
                       <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
+                    <el-option key="closed" label="已关闭" :value="5" :disabled="!isAdmin" />
                     </el-select>
                   </div>
                 </el-tooltip>
@@ -345,14 +347,20 @@ function visibleCases(group: FailCaseGrouped): GroupedFailCase[] {
   const key = groupKey(group)
   const af = assigneeFilter[key]
   const sf = statusFilter[key]
-  return group.cases.filter((c) => {
+  const filtered = group.cases.filter((c) => {
     if (af !== undefined) {
       if (af === 0 ? c.assigneeId != null : c.assigneeId !== af) return false
     }
     if (sf !== undefined) {
-      if (sf === 99 ? (c.status !== 3 && c.status !== 4) : c.status !== sf) return false
+      if (sf === 99 ? (c.status !== 3 && c.status !== 4 && c.status !== 5) : c.status !== sf) return false
     }
     return true
+  })
+  // 已关闭(5) 排到最后；其余保持原顺序
+  return [...filtered].sort((a, b) => {
+    if (a.status === 5 && b.status !== 5) return 1
+    if (a.status !== 5 && b.status === 5) return -1
+    return 0
   })
 }
 
@@ -361,14 +369,17 @@ function isMyCase(row: GroupedFailCase): boolean {
   return row.assigneeId != null && row.assigneeId === userStore.userInfo?.id
 }
 
-/** 普通用户是否有权操作该行（责任人是自己；管理员不受限） */
+/** 普通用户是否有权操作该行（责任人是自己；管理员不受限；已关闭仅管理员可操作） */
 function canOperate(row: GroupedFailCase): boolean {
-  return isAdmin.value || isMyCase(row)
+  if (isAdmin.value) return true
+  if (row.status === 5) return false
+  return isMyCase(row)
 }
 
-/** 责任人下拉是否禁用：普通用户不能操作他人责任行 */
+/** 责任人下拉是否禁用：普通用户不能操作他人责任行；已关闭仅管理员可操作 */
 function assignDisabled(row: GroupedFailCase): boolean {
   if (isAdmin.value) return false
+  if (row.status === 5) return true
   return row.assigneeId != null && row.assigneeId !== userStore.userInfo?.id
 }
 
@@ -394,6 +405,7 @@ function fieldDisabled(row: GroupedFailCase, field: GuardField): boolean {
 
 function fieldDisabledTip(row: GroupedFailCase, field: GuardField): string {
   if (isAdmin.value) return ''
+  if (row.status === 5) return '已关闭用例仅可查看'
   if (!canOperate(row)) return '仅责任人为自己的问题单可操作'
   if (field === 'status') return '请完成所有信息后再更新'
   return ''
@@ -405,7 +417,9 @@ function saveDisabled(row: GroupedFailCase): boolean {
 }
 
 function saveDisabledTip(row: GroupedFailCase): string {
-  return saveDisabled(toCase(row)) ? '仅责任人为自己的问题单可操作' : ''
+  if (isAdmin.value) return ''
+  if (row.status === 5) return '已关闭用例仅可查看'
+  return saveDisabled(row) ? '仅责任人为自己的问题单可操作' : ''
 }
 
 /** 将 el-table 插槽的 DefaultRow 转换为强类型用例对象 */
@@ -420,15 +434,23 @@ function statusClass(status: number | undefined): string {
   return ''
 }
 
-/** 分组状态统计：待处理/处理中/已修复(含非缺陷)/分析完成率 */
+/** 分组状态统计：待处理/处理中/已修复(含非缺陷)/已关闭/分析完成率 */
 function groupStatusStats(group: FailCaseGrouped) {
   const cases = group.cases
   const pending = cases.filter((c) => c.status === 1).length
   const processing = cases.filter((c) => c.status === 2).length
   const fixed = cases.filter((c) => c.status === 3 || c.status === 4).length
+  const closed = cases.filter((c) => c.status === 5).length
   const total = cases.length
-  const rate = total > 0 ? Math.round((fixed / total) * 100) : 100
-  return { pending, processing, fixed, rate }
+  // 已修复 + 已关闭 均计入分析完成
+  const done = fixed + closed
+  const rate = total > 0 ? Math.round((done / total) * 100) : 100
+  return { pending, processing, fixed, closed, rate }
+}
+
+/** 已关闭用例整行置灰 */
+function rowClassName({ row }: { row: GroupedFailCase }): string {
+  return row.status === 5 ? 'row-closed' : ''
 }
 
 /** 打开该分组的原始 HTML 测试报告（新窗口） */
@@ -1024,6 +1046,19 @@ onMounted(async () => {
 .status-cell.status-fixed .status-select :deep(.el-select__wrapper) {
   background-color: #e8f5e9 !important;
   box-shadow: 0 0 0 1px #4caf50 inset !important;
+}
+
+/* 已关闭用例整行置灰（管理员关闭后置底） */
+:deep(.row-closed) {
+  color: #c0c4cc;
+}
+:deep(.row-closed td) {
+  background: #f5f7fa !important;
+  color: #c0c4cc !important;
+}
+:deep(.row-closed:hover > td),
+:deep(.row-closed.el-table__row--hover > td) {
+  background: #ebeef5 !important;
 }
 </style>
 

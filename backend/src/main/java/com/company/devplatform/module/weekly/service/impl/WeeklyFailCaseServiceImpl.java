@@ -43,8 +43,12 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "所属周度报告不存在");
         }
 
-        // 前置条件校验：仅普通用户遵循，管理员（超管/普通管理员）豁免
         if (!isAdmin()) {
+            // 关闭用例仅管理员可操作：普通用户既不能设为关闭，也不能修改已关闭的用例
+            if ((dto.getStatus() != null && dto.getStatus() == FailCaseStatus.CLOSED.getCode())
+                    || (c.getStatus() != null && c.getStatus() == FailCaseStatus.CLOSED.getCode())) {
+                throw new BusinessException(ErrorCode.NO_PERMISSION, "已关闭用例仅管理员可操作");
+            }
             long current = currentUserId();
             if (c.getAssigneeId() == null) {
                 // 未指派责任人：仅允许指派给自己（认领），其余栏位禁止修改
@@ -85,7 +89,7 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "非法的用例状态");
         }
         if (current != target) {
-            if (current.getCode() >= FailCaseStatus.FIXED.getCode() && target == FailCaseStatus.PENDING) {
+            if ((current == FailCaseStatus.FIXED || current == FailCaseStatus.NOT_DEFECT) && target == FailCaseStatus.PENDING) {
                 throw new BusinessException(ErrorCode.BUSINESS_ERROR, "已处理完成的用例不能回退为待处理");
             }
             if (target == FailCaseStatus.FIXED || target == FailCaseStatus.NOT_DEFECT) {
@@ -127,6 +131,10 @@ public class WeeklyFailCaseServiceImpl implements WeeklyFailCaseService {
         Long assigneeId = dto.getAssigneeId();
         // 普通用户指派规则：未指派仅可认领给自己；已指派仅当前被指派人可转派给他人，不能取消；管理员（超管/普通管理员）豁免
         if (!isAdmin()) {
+            // 已关闭用例普通用户仅可查看，不能改责任人
+            if (c.getStatus() != null && c.getStatus() == FailCaseStatus.CLOSED.getCode()) {
+                throw new BusinessException(ErrorCode.NO_PERMISSION, "已关闭用例仅管理员可操作");
+            }
             long current = currentUserId();
             if (c.getAssigneeId() == null) {
                 // 未指派：仅允许认领给自己

@@ -16,7 +16,9 @@ public enum FailCaseStatus {
     /** 已修复 */
     FIXED(3, "已修复"),
     /** 非缺陷（无需处理） */
-    NOT_DEFECT(4, "非缺陷");
+    NOT_DEFECT(4, "非缺陷"),
+    /** 已关闭：管理员识别为非问题后直接关闭，从分析完成率分母排除 */
+    CLOSED(5, "已关闭");
 
     private final int code;
     private final String desc;
