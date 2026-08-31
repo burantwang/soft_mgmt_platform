@@ -131,7 +131,15 @@
             </el-select>
           </div>
 
-          <el-table :data="visibleCases(group)" border stripe size="small" class="case-table">
+          <el-table
+            :data="visibleCases(group)"
+            border
+            stripe
+            size="small"
+            class="case-table"
+            :expand-on-click-row="false"
+            @expand-change="onExpandChange"
+          >
             <el-table-column type="expand" width="45">
               <template #default="{ row }">
                 <div class="case-log">
@@ -153,7 +161,24 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'failReason')" placement="top" :disabled="!fieldDisabled(toCase(row), 'failReason')">
                   <div>
-                    <el-input v-model="editing[row.id].failReason" type="textarea" :rows="2" placeholder="填写失败原因" :disabled="fieldDisabled(toCase(row), 'failReason')" />
+                    <el-input
+                      v-if="isExpanded(row.id)"
+                      :key="`fr-on-${row.id}`"
+                      v-model="editing[row.id].failReason"
+                      type="textarea"
+                      :autosize="{ minRows: 1, maxRows: 200 }"
+                      placeholder="填写失败原因"
+                      :disabled="fieldDisabled(toCase(row), 'failReason')"
+                    />
+                    <el-input
+                      v-else
+                      :key="`fr-off-${row.id}`"
+                      v-model="editing[row.id].failReason"
+                      type="textarea"
+                      :autosize="{ minRows: 1, maxRows: 2 }"
+                      placeholder="填写失败原因"
+                      :disabled="fieldDisabled(toCase(row), 'failReason')"
+                    />
                   </div>
                 </el-tooltip>
               </template>
@@ -162,7 +187,24 @@
               <template #default="{ row }">
                 <el-tooltip :content="fieldDisabledTip(toCase(row), 'progress')" placement="top" :disabled="!fieldDisabled(toCase(row), 'progress')">
                   <div>
-                    <el-input v-model="editing[row.id].progress" type="textarea" :rows="2" placeholder="填写分析进展与结论" :disabled="fieldDisabled(toCase(row), 'progress')" />
+                    <el-input
+                      v-if="isExpanded(row.id)"
+                      :key="`pr-on-${row.id}`"
+                      v-model="editing[row.id].progress"
+                      type="textarea"
+                      :autosize="{ minRows: 1, maxRows: 200 }"
+                      placeholder="填写分析进展与结论"
+                      :disabled="fieldDisabled(toCase(row), 'progress')"
+                    />
+                    <el-input
+                      v-else
+                      :key="`pr-off-${row.id}`"
+                      v-model="editing[row.id].progress"
+                      type="textarea"
+                      :autosize="{ minRows: 1, maxRows: 2 }"
+                      placeholder="填写分析进展与结论"
+                      :disabled="fieldDisabled(toCase(row), 'progress')"
+                    />
                   </div>
                 </el-tooltip>
               </template>
@@ -558,6 +600,24 @@ async function saveCase(row: any) {
   }
 }
 
+/** 行展开状态：用于让行内长文本栏位（失败原因/分析进展/AI 分析）按内容自适应撑高 */
+const expandedRowIds = ref<Set<number>>(new Set())
+
+/** 判断某行是否处于展开状态 */
+function isExpanded(id: number): boolean {
+  return expandedRowIds.value.has(id)
+}
+
+/** 长文本 textarea 的 autosize 配置：展开时按内容撑高，未展开时 2 行紧凑 */
+function textAreaAutoSize(id: number) {
+  return isExpanded(id) ? { minRows: 1, maxRows: 200 } : { minRows: 1, maxRows: 2 }
+}
+
+/** el-table expand 事件：把当前所有展开行同步到 expandedRowIds */
+function onExpandChange(_row: any, expandedRows: any[]) {
+  expandedRowIds.value = new Set(expandedRows.map((r) => r.id))
+}
+
 onMounted(async () => {
   // 刷新页面后用户信息为空，先拉取以获取角色编码（判断管理员豁免）
   if (!userStore.userInfo) {
@@ -896,6 +956,8 @@ onMounted(async () => {
   gap: 8px;
 }
 
+/* 行展开时 textarea 自动按内容撑高，无需限制最大高度 */
+
 .name-text {
   font-family: "JetBrains Mono", Consolas, monospace;
 }
@@ -939,6 +1001,16 @@ onMounted(async () => {
   color: #606266;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* 行展开时 AI 分析描述按内容撑高 */
+.ai-cell.ai-cell-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  overflow: visible;
+  max-height: none;
+  white-space: pre-wrap;
 }
 
 /* 状态栏位底色（Element Plus 2.4+ 的 el-select 内部结构为 .el-select__wrapper） */
