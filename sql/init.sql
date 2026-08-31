@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS release_fail_case (
   fail_reason   VARCHAR(1000)          DEFAULT NULL COMMENT '失败原因(责任人填写)',
   fix_plan      VARCHAR(1000)          DEFAULT NULL COMMENT '修改方案(责任人填写)',
   is_bug        TINYINT                DEFAULT 0 COMMENT '是否提Bug:0否 1是',
-  progress      VARCHAR(255)           DEFAULT NULL COMMENT '分析进展',
+  progress      TEXT                   DEFAULT NULL COMMENT '分析进展',
   conclusion    VARCHAR(1000)          DEFAULT NULL COMMENT '结论',
   ai_analysis   LONGTEXT               DEFAULT NULL COMMENT 'AI辅助分析描述(原因分析、修改建议等)',
   status        TINYINT       NOT NULL DEFAULT 1 COMMENT '状态:1待处理 2处理中 3已完成 4已关闭',

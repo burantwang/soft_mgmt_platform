@@ -28,8 +28,7 @@ public class FailCaseUpdateDTO {
     /** 是否提Bug:0否 1是 */
     private Integer isBug;
 
-    /** 分析进展 */
-    @Size(max = 255, message = "分析进展不能超过255字")
+    /** 分析进展（无长度限制） */
     private String progress;
 
     /** 结论 */
