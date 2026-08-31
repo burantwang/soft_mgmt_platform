@@ -92,13 +92,31 @@
             </div>
           </template>
 
-          <!-- 模块(HTML)独立统计 -->
+          <!-- 模块(HTML)独立统计（默认折叠，点击标题展开） -->
           <div v-if="group.modules && group.modules.length" class="module-stats">
-            <div class="ms-header">
-              <span class="ms-title">模块执行统计</span>
-              <span class="ms-sub">全量测试结果分模块执行，每个 HTML 单独记录统计</span>
+            <div
+              class="ms-header"
+              :class="{ expanded: isModuleExpanded(groupKey(group)) }"
+              @click="toggleModuleStats(groupKey(group))"
+            >
+              <div class="ms-header-left">
+                <el-icon class="ms-arrow">
+                  <component :is="isModuleExpanded(groupKey(group)) ? ArrowDown : ArrowRight" />
+                </el-icon>
+                <span class="ms-title">模块执行统计</span>
+                <span class="ms-sub">全量测试结果分模块执行，每个 HTML 单独记录统计</span>
+              </div>
+              <div class="ms-header-right">
+                <span class="ms-summary">共 {{ group.modules.length }} 个模块</span>
+              </div>
             </div>
-            <el-table :data="group.modules" border size="small" class="module-table">
+            <el-table
+              v-show="isModuleExpanded(groupKey(group))"
+              :data="group.modules"
+              border
+              size="small"
+              class="module-table"
+            >
               <el-table-column prop="moduleName" label="模块(HTML)" min-width="200" show-overflow-tooltip>
                 <template #default="{ row }">
                   <span class="module-name">{{ row.moduleName }}</span>
@@ -411,6 +429,7 @@ import type {
 } from '@/types/weekly'
 import type { ReleaseProject, UserOption } from '@/types/release'
 import { useUserStore } from '@/store/user'
+import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import ResizeTipTextarea from '@/components/ResizeTipTextarea.vue'
 
 const userStore = useUserStore()
@@ -443,6 +462,17 @@ const statusOptions = [
 ]
 
 const editing = reactive<Record<number, WeeklyFailCaseUpdateForm>>({})
+
+/** 每个分组（分支×机型）模块执行统计的展开状态（默认折叠） */
+const moduleExpanded = reactive<Record<string, boolean>>({})
+
+function isModuleExpanded(key: string): boolean {
+  return !!moduleExpanded[key]
+}
+
+function toggleModuleStats(key: string) {
+  moduleExpanded[key] = !moduleExpanded[key]
+}
 
 // 每个分组（分支×机型）的按责任人筛选：value 为 undefined 表示全部，0 表示未指派
 const assigneeFilter = reactive<Record<string, number | undefined>>({})
@@ -1178,7 +1208,44 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  padding: 4px 8px;
+  margin: -4px -8px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+.ms-header:hover {
+  background: #eef2f7;
+}
+.ms-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ms-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+.ms-arrow {
+  color: #909399;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.ms-header.expanded .ms-arrow {
+  color: #409eff;
+}
+.ms-summary {
+  padding: 2px 10px;
+  background: #ecf5ff;
+  color: #409eff;
+  border-radius: 10px;
+  font-weight: 500;
 }
 
 .ms-title {
