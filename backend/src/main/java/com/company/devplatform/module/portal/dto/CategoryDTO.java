@@ -28,6 +28,10 @@ public class CategoryDTO {
     @Size(max = 255, message = "板块描述不能超过255个字符")
     private String description;
 
+    /** 展示方式:card卡片 table表格 */
+    @Pattern(regexp = "^(card|table)$", message = "展示方式不正确(仅支持 card/table)")
+    private String layout;
+
     /** 排序(小值在前) */
     private Integer sort;
 

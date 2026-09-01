@@ -31,6 +31,12 @@ public class PortalLink {
     /** 系统简介 */
     private String description;
 
+    /** 登录用户名(表格板块使用) */
+    private String username;
+
+    /** 登录密码(表格板块使用) */
+    private String password;
+
     /** 图标(Element Plus 图标名或 emoji) */
     private String icon;
 

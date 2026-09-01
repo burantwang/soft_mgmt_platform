@@ -10,6 +10,10 @@ export interface PortalLinkItem {
   linkName: string
   url: string
   description?: string
+  /** 登录用户名（表格板块使用） */
+  username?: string
+  /** 登录密码（表格板块使用） */
+  password?: string
   /** Element Plus 图标名或 emoji */
   icon?: string
   /** 主题色 hex */
@@ -26,6 +30,8 @@ export interface PortalCategory {
   icon?: string
   color?: string
   description?: string
+  /** 展示方式：card 卡片 / table 表格 */
+  layout?: string
   sort: number
   status: number
   linkCount: number
@@ -38,6 +44,7 @@ export interface PortalCategoryForm {
   icon?: string
   color?: string
   description?: string
+  layout?: string
   sort?: number
   status?: number
 }
@@ -48,6 +55,8 @@ export interface PortalLinkForm {
   linkName: string
   url: string
   description?: string
+  username?: string
+  password?: string
   icon?: string
   color?: string
   sort?: number

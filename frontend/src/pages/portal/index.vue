@@ -23,7 +23,7 @@
       <!-- 板块区 -->
       <div v-loading="loading" class="portal-body">
         <template v-if="filteredCategories.length">
-          <section v-for="cat in filteredCategories" :key="cat.id" class="category-card">
+          <section v-for="cat in filteredCategories" :key="cat.id" class="category-card" :style="cardStyle(cat.color)">
             <header class="category-header">
               <span class="category-icon" :style="{ background: tintColor(cat.color), color: cat.color }">
                 <el-icon v-if="isEpIcon(cat.icon)" :size="20"><component :is="cat.icon" /></el-icon>
@@ -35,26 +35,75 @@
               </div>
               <span class="category-count">{{ cat.links.length }} 个系统</span>
             </header>
-            <div v-if="cat.links.length" class="link-grid">
-              <a
-                v-for="link in cat.links"
-                :key="link.id"
-                class="link-card"
-                :style="cardStyle(link.color)"
-                @click.prevent="openLink(link)"
-              >
-                <span class="link-icon" :style="{ background: tintColor(link.color), color: link.color }">
-                  <el-icon v-if="isEpIcon(link.icon)" :size="22"><component :is="link.icon" /></el-icon>
-                  <span v-else class="icon-emoji">{{ link.icon || '🔗' }}</span>
-                </span>
-                <span class="link-info">
-                  <span class="link-name">{{ link.linkName }}</span>
-                  <span v-if="link.description" class="link-desc">{{ link.description }}</span>
-                </span>
-                <el-icon class="link-arrow" :size="14" :style="{ color: link.color }"><Right /></el-icon>
-              </a>
-            </div>
-            <el-empty v-else description="该板块暂未配置系统" :image-size="60" />
+            <!-- 表格展示板块（如 其他地址清单） -->
+            <template v-if="cat.layout === 'table'">
+              <div v-if="cat.links.length" class="address-table-wrap">
+                <el-table :data="cat.links" style="width: 100%" class="address-table">
+                  <el-table-column label="地址" min-width="240">
+                    <template #default="{ row }">
+                      <div class="addr-cell">
+                        <span class="addr-code">{{ row.url }}</span>
+                        <el-button link :icon="CopyDocument" class="cell-action" title="复制地址" @click="copyText(row.url)" />
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="地址说明" min-width="220" show-overflow-tooltip>
+                    <template #default="{ row }">
+                      <span class="addr-desc">{{ row.description || '-' }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="用户名密码" min-width="280">
+                    <template #default="{ row }">
+                      <div class="cred-cell">
+                        <span class="cred-user">{{ row.username || '-' }}</span>
+                        <span v-if="row.password" class="cred-sep">/</span>
+                        <span v-if="row.password" class="cred-pass">{{ pwdVisible.has(row.id) ? row.password : '••••••••' }}</span>
+                        <el-button
+                          v-if="row.password"
+                          link
+                          :icon="pwdVisible.has(row.id) ? Hide : View"
+                          class="cell-action"
+                          :title="pwdVisible.has(row.id) ? '隐藏密码' : '显示密码'"
+                          @click="togglePwd(row.id)"
+                        />
+                        <el-button
+                          v-if="row.username || row.password"
+                          link
+                          :icon="CopyDocument"
+                          class="cell-action"
+                          title="复制账号信息"
+                          @click="copyText(formatCredential(row as PortalLinkItem))"
+                        />
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+              <el-empty v-else description="该板块暂未配置地址" :image-size="60" />
+            </template>
+            <!-- 卡片展示板块（默认） -->
+            <template v-else>
+              <div v-if="cat.links.length" class="link-grid">
+                <a
+                  v-for="link in cat.links"
+                  :key="link.id"
+                  class="link-card"
+                  :style="cardStyle(link.color)"
+                  @click.prevent="openLink(link)"
+                >
+                  <span class="link-icon" :style="{ background: tintColor(link.color), color: link.color }">
+                    <el-icon v-if="isEpIcon(link.icon)" :size="22"><component :is="link.icon" /></el-icon>
+                    <span v-else class="icon-emoji">{{ link.icon || '🔗' }}</span>
+                  </span>
+                  <span class="link-info">
+                    <span class="link-name">{{ link.linkName }}</span>
+                    <span v-if="link.description" class="link-desc">{{ link.description }}</span>
+                  </span>
+                  <el-icon class="link-arrow" :size="14" :style="{ color: link.color }"><Right /></el-icon>
+                </a>
+              </div>
+              <el-empty v-else description="该板块暂未配置系统" :image-size="60" />
+            </template>
           </section>
         </template>
         <el-empty v-else-if="!loading" description="暂无板块，请点击右上角「管理门户」开始配置" />
@@ -208,6 +257,12 @@
         <el-form-item label="板块描述" prop="description">
           <el-input v-model="categoryDialog.form.description" type="textarea" :rows="2" placeholder="板块用途说明（可选）" maxlength="255" show-word-limit />
         </el-form-item>
+        <el-form-item label="展示方式" prop="layout">
+          <el-radio-group v-model="categoryDialog.form.layout">
+            <el-radio value="card">卡片展示（图标方块）</el-radio>
+            <el-radio value="table">表格展示（地址清单）</el-radio>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="categoryDialog.visible = false">取消</el-button>
@@ -232,10 +287,16 @@
           <el-input v-model="linkDialog.form.linkName" placeholder="如 GitLab / Jenkins" maxlength="64" show-word-limit />
         </el-form-item>
         <el-form-item label="访问地址" prop="url">
-          <el-input v-model="linkDialog.form.url" placeholder="https:// 或站内路径如 /wiki" maxlength="500" />
+          <el-input v-model="linkDialog.form.url" placeholder="https://、站内路径 /wiki、或 IP:端口 如 192.168.1.100:22" maxlength="500" />
         </el-form-item>
         <el-form-item label="系统简介">
           <el-input v-model="linkDialog.form.description" type="textarea" :rows="2" placeholder="系统用途说明（可选）" maxlength="255" show-word-limit />
+        </el-form-item>
+        <el-form-item label="登录用户名">
+          <el-input v-model="linkDialog.form.username" placeholder="表格板块展示，如 root（可选）" maxlength="128" />
+        </el-form-item>
+        <el-form-item label="登录密码">
+          <el-input v-model="linkDialog.form.password" type="password" show-password placeholder="表格板块展示，默认掩码（可选）" maxlength="255" />
         </el-form-item>
         <el-form-item label="系统图标">
           <el-select
@@ -268,7 +329,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
-import { Search, Setting, ArrowLeft, Refresh, Plus, Top, Bottom, Right } from '@element-plus/icons-vue'
+import { Search, Setting, ArrowLeft, Refresh, Plus, Top, Bottom, Right, View, Hide, CopyDocument } from '@element-plus/icons-vue'
 import * as ElementPlusIcons from '@element-plus/icons-vue'
 import { getPerms } from '@/utils/auth'
 import {
@@ -412,7 +473,14 @@ const submitting = ref(false)
 const categoryFormRef = ref<FormInstance>()
 const categoryDialog = reactive({
   visible: false,
-  form: { id: undefined as number | undefined, categoryName: '', icon: 'Menu', color: '#409EFF', description: '' }
+  form: {
+    id: undefined as number | undefined,
+    categoryName: '',
+    icon: 'Menu',
+    color: '#409EFF',
+    description: '',
+    layout: 'card'
+  }
 })
 const categoryRules = {
   categoryName: [{ required: true, message: '请输入板块名称', trigger: 'blur' }]
@@ -420,8 +488,15 @@ const categoryRules = {
 
 function openCategoryDialog(row?: PortalCategory) {
   categoryDialog.form = row
-    ? { id: row.id, categoryName: row.categoryName, icon: row.icon || 'Menu', color: row.color || '#409EFF', description: row.description || '' }
-    : { id: undefined, categoryName: '', icon: 'Menu', color: '#409EFF', description: '' }
+    ? {
+        id: row.id,
+        categoryName: row.categoryName,
+        icon: row.icon || 'Menu',
+        color: row.color || '#409EFF',
+        description: row.description || '',
+        layout: row.layout || 'card'
+      }
+    : { id: undefined, categoryName: '', icon: 'Menu', color: '#409EFF', description: '', layout: 'card' }
   categoryDialog.visible = true
 }
 
@@ -454,6 +529,8 @@ const linkDialog = reactive({
     linkName: '',
     url: '',
     description: '',
+    username: '',
+    password: '',
     icon: 'Link',
     color: '#409EFF'
   }
@@ -461,14 +538,7 @@ const linkDialog = reactive({
 const linkRules = {
   categoryId: [{ required: true, message: '请选择所属板块', trigger: 'change' }],
   linkName: [{ required: true, message: '请输入系统名称', trigger: 'blur' }],
-  url: [
-    { required: true, message: '请输入访问地址', trigger: 'blur' },
-    {
-      pattern: /^(https?:\/\/|\/).+/,
-      message: '需以 http://、https:// 或 / 开头',
-      trigger: 'blur'
-    }
-  ]
+  url: [{ required: true, message: '请输入访问地址', trigger: 'blur' }]
 }
 
 function openLinkDialog(row?: PortalLinkItem) {
@@ -479,6 +549,8 @@ function openLinkDialog(row?: PortalLinkItem) {
         linkName: row.linkName,
         url: row.url,
         description: row.description || '',
+        username: row.username || '',
+        password: row.password || '',
         icon: row.icon || 'Link',
         color: row.color || '#409EFF'
       }
@@ -488,6 +560,8 @@ function openLinkDialog(row?: PortalLinkItem) {
         linkName: '',
         url: '',
         description: '',
+        username: '',
+        password: '',
         icon: 'Link',
         color: '#409EFF'
       }
@@ -546,6 +620,36 @@ function openLink(link: PortalLinkItem) {
   }
 }
 
+/* ---------------- 表格板块辅助 ---------------- */
+/** 当前可见密码的行 ID 集合 */
+const pwdVisible = ref<Set<number>>(new Set())
+
+function togglePwd(id: number) {
+  const s = new Set(pwdVisible.value)
+  if (s.has(id)) {
+    s.delete(id)
+  } else {
+    s.add(id)
+  }
+  pwdVisible.value = s
+}
+
+/** 拼接 用户名 / 密码 便于复制 */
+function formatCredential(row: PortalLinkItem): string {
+  return [row.username, row.password].filter(Boolean).join(' / ')
+}
+
+/** 复制文本到剪贴板 */
+async function copyText(text: string) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动复制')
+  }
+}
+
 onMounted(loadOverview)
 </script>
 
@@ -591,10 +695,10 @@ onMounted(loadOverview)
 
 /* 板块卡片 */
 .category-card {
-  background: #fff;
+  background: #f8f9fa;
   border-radius: 12px;
   padding: 20px 20px 24px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   transition: box-shadow 0.2s;
 
@@ -607,14 +711,29 @@ onMounted(loadOverview)
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  padding-left: 14px;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 36px;
+    border-radius: 2px;
+    background: var(--link-color);
+  }
 
   .category-meta {
     flex: 1;
     h3 {
       margin: 0;
-      font-size: 16px;
-      color: var(--text-main);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--link-color);
     }
     p {
       margin: 4px 0 0;
@@ -626,7 +745,7 @@ onMounted(loadOverview)
   .category-count {
     font-size: 12px;
     color: var(--text-sub);
-    background: #f5f7fa;
+    background: #fff;
     border-radius: 10px;
     padding: 3px 10px;
   }
@@ -657,26 +776,28 @@ onMounted(loadOverview)
 /* 链接卡片网格 */
 .link-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
 }
 
 .link-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 14px 14px;
-  background: #fafbfc;
-  border: 1px solid #eef0f2;
-  border-radius: 10px;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
   cursor: pointer;
   text-decoration: none;
   transition: all 0.2s;
 
   &:hover {
-    background: #fff;
     border-color: var(--link-color);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
 
     .link-arrow {
@@ -689,24 +810,34 @@ onMounted(loadOverview)
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 3px 10px;
     border-radius: 10px;
     flex-shrink: 0;
 
+    .el-icon {
+      font-size: 18px;
+    }
+
     .icon-emoji {
-      font-size: 22px;
+      font-size: 12px;
+      font-weight: 600;
       line-height: 1;
+      white-space: nowrap;
     }
   }
 
   .link-info {
-    flex: 1;
     min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    text-align: center;
 
     .link-name {
+      max-width: 100%;
       font-size: 14px;
       font-weight: 600;
       color: var(--text-main);
@@ -716,20 +847,100 @@ onMounted(loadOverview)
     }
 
     .link-desc {
-      margin-top: 3px;
-      font-size: 12px;
+      margin-top: 2px;
+      font-size: 11px;
       color: var(--text-sub);
-      white-space: nowrap;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      line-clamp: 1;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
+      max-width: 100%;
     }
   }
 
   .link-arrow {
+    position: absolute;
+    top: 10px;
+    right: 10px;
     opacity: 0;
     transform: translateX(-4px);
     transition: all 0.2s;
     flex-shrink: 0;
+  }
+}
+
+/* 表格展示板块（其他地址清单） */
+.address-table-wrap {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+
+  .address-table {
+    --el-table-border-color: #f2f3f5;
+    --el-table-header-bg-color: #fafbfc;
+    --el-table-header-text-color: #606266;
+    --el-table-row-hover-bg-color: #f8f9fa;
+
+    :deep(.el-table__inner-wrapper::before) {
+      display: none;
+    }
+  }
+
+  .addr-cell,
+  .cred-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+  }
+
+  .addr-code {
+    font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--text-main);
+    word-break: break-all;
+  }
+
+  .addr-desc {
+    font-size: 13px;
+    color: var(--text-sub);
+  }
+
+  .cred-user {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+  }
+
+  .cred-sep {
+    color: #c0c4cc;
+    margin: 0 2px;
+  }
+
+  .cred-pass {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 13px;
+    color: var(--text-sub);
+    letter-spacing: 1px;
+  }
+
+  .cell-action {
+    color: #909399;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+
+    &:hover {
+      opacity: 1;
+      color: var(--el-color-primary);
+    }
+  }
+
+  .addr-cell:hover .cell-action,
+  .cred-cell:hover .cell-action {
+    opacity: 1;
   }
 }
 

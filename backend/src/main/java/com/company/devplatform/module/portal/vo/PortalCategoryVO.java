@@ -26,6 +26,9 @@ public class PortalCategoryVO {
     /** 板块描述 */
     private String description;
 
+    /** 展示方式:card卡片 table表格 */
+    private String layout;
+
     /** 排序 */
     private Integer sort;
 

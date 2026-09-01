@@ -31,6 +31,9 @@ public class PortalCategory {
     /** 板块描述 */
     private String description;
 
+    /** 展示方式:card卡片 table表格 */
+    private String layout;
+
     /** 排序(小值在前) */
     private Integer sort;
 

@@ -21,15 +21,22 @@ public class LinkDTO {
     @Size(max = 64, message = "系统名称不能超过64个字符")
     private String linkName;
 
-    /** 访问地址：http/https 开头，或站内相对路径(如 /wiki) */
+    /** 访问地址：支持 http(s)://、站内路径(如 /wiki)、或 IP:端口 等连接地址 */
     @NotBlank(message = "访问地址不能为空")
     @Size(max = 500, message = "访问地址不能超过500个字符")
-    @Pattern(regexp = "^(https?://|/).+", message = "访问地址需以 http://、https:// 或 / 开头")
     private String url;
 
     /** 系统简介 */
     @Size(max = 255, message = "系统简介不能超过255个字符")
     private String description;
+
+    /** 登录用户名 */
+    @Size(max = 128, message = "用户名不能超过128个字符")
+    private String username;
+
+    /** 登录密码 */
+    @Size(max = 255, message = "密码不能超过255个字符")
+    private String password;
 
     /** 图标(Element Plus 图标名或 emoji) */
     @Size(max = 64, message = "图标不能超过64个字符")

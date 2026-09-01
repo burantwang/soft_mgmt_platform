@@ -73,6 +73,7 @@ public class PortalServiceImpl implements PortalService {
         c.setIcon(StringUtils.hasText(dto.getIcon()) ? dto.getIcon() : DEFAULT_ICON);
         c.setColor(StringUtils.hasText(dto.getColor()) ? dto.getColor() : DEFAULT_COLOR);
         c.setDescription(dto.getDescription());
+        c.setLayout(StringUtils.hasText(dto.getLayout()) ? dto.getLayout() : "card");
         c.setSort(resolveCategorySort());
         c.setStatus(dto.getStatus() == null ? 1 : dto.getStatus());
         c.setCreatorId(currentUserId());
@@ -90,6 +91,7 @@ public class PortalServiceImpl implements PortalService {
         c.setIcon(StringUtils.hasText(dto.getIcon()) ? dto.getIcon() : DEFAULT_ICON);
         c.setColor(StringUtils.hasText(dto.getColor()) ? dto.getColor() : DEFAULT_COLOR);
         c.setDescription(dto.getDescription());
+        c.setLayout(StringUtils.hasText(dto.getLayout()) ? dto.getLayout() : "card");
         if (dto.getSort() != null) {
             c.setSort(dto.getSort());
         }
@@ -142,6 +144,8 @@ public class PortalServiceImpl implements PortalService {
         l.setLinkName(dto.getLinkName().trim());
         l.setUrl(dto.getUrl().trim());
         l.setDescription(dto.getDescription());
+        l.setUsername(dto.getUsername());
+        l.setPassword(dto.getPassword());
         l.setIcon(StringUtils.hasText(dto.getIcon()) ? dto.getIcon() : DEFAULT_ICON);
         l.setColor(StringUtils.hasText(dto.getColor()) ? dto.getColor() : DEFAULT_COLOR);
         l.setSort(resolveLinkSort(dto.getCategoryId()));
@@ -164,6 +168,8 @@ public class PortalServiceImpl implements PortalService {
         l.setLinkName(dto.getLinkName().trim());
         l.setUrl(dto.getUrl().trim());
         l.setDescription(dto.getDescription());
+        l.setUsername(dto.getUsername());
+        l.setPassword(dto.getPassword());
         l.setIcon(StringUtils.hasText(dto.getIcon()) ? dto.getIcon() : DEFAULT_ICON);
         l.setColor(StringUtils.hasText(dto.getColor()) ? dto.getColor() : DEFAULT_COLOR);
         if (dto.getSort() != null) {
@@ -223,6 +229,7 @@ public class PortalServiceImpl implements PortalService {
             vo.setIcon(c.getIcon());
             vo.setColor(c.getColor());
             vo.setDescription(c.getDescription());
+            vo.setLayout(c.getLayout());
             vo.setSort(c.getSort());
             vo.setStatus(c.getStatus());
             List<PortalLink> catLinks = byCategory.getOrDefault(c.getId(), new ArrayList<>());
@@ -245,6 +252,8 @@ public class PortalServiceImpl implements PortalService {
         vo.setLinkName(l.getLinkName());
         vo.setUrl(l.getUrl());
         vo.setDescription(l.getDescription());
+        vo.setUsername(l.getUsername());
+        vo.setPassword(l.getPassword());
         vo.setIcon(l.getIcon());
         vo.setColor(l.getColor());
         vo.setSort(l.getSort());

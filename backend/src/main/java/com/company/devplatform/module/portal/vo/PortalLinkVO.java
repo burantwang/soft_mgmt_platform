@@ -23,6 +23,12 @@ public class PortalLinkVO {
     /** 系统简介 */
     private String description;
 
+    /** 登录用户名 */
+    private String username;
+
+    /** 登录密码 */
+    private String password;
+
     /** 图标 */
     private String icon;
 
