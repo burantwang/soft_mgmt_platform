@@ -27,8 +27,15 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
-    redirect: '/dashboard',
+    redirect: '/portal',
     children: [
+      {
+        // 系统门户：部门常用系统导航聚合页（登录后默认落地页）
+        path: 'portal',
+        name: 'Portal',
+        component: () => import('@/pages/portal/index.vue'),
+        meta: { title: '系统门户', icon: 'Compass', perm: 'portal:view' }
+      },
       {
         path: 'dashboard',
         name: 'Dashboard',
