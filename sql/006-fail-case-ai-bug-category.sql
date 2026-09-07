@@ -5,7 +5,8 @@
 
 -- 1. release_fail_case 新增字段
 ALTER TABLE release_fail_case
-  ADD COLUMN ai_root_cause   TEXT         DEFAULT NULL COMMENT 'AI分析根因' AFTER ai_analysis,
+  ADD COLUMN ai_analysis_correct TINYINT DEFAULT NULL COMMENT 'AI分析是否正确:1是 0否' AFTER ai_analysis,
+  ADD COLUMN ai_root_cause   TEXT         DEFAULT NULL COMMENT 'AI分析根因' AFTER ai_analysis_correct,
   ADD COLUMN ai_evidence     TEXT         DEFAULT NULL COMMENT 'AI分析佐证' AFTER ai_root_cause,
   ADD COLUMN ai_solution     TEXT         DEFAULT NULL COMMENT 'AI解决建议' AFTER ai_evidence,
   ADD COLUMN bug_no          VARCHAR(32)  DEFAULT NULL COMMENT 'Bug单号(Redmine)' AFTER ai_solution,

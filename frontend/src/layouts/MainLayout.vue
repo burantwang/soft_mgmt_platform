@@ -63,7 +63,7 @@
           </el-dropdown>
         </div>
       </el-header>
-      <el-main class="layout-main">
+      <el-main ref="mainEl" class="layout-main">
         <router-view />
       </el-main>
     </el-container>
@@ -89,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { routes } from '@/router/routes'
@@ -108,6 +108,16 @@ const isCollapse = ref(false)
 const dailySanityVisible = ref(false)
 const weeklySanityVisible = ref(false)
 const dvsSanityVisible = ref(false)
+const mainEl = ref<any>(null)
+
+/** 路由切换时重置内容区滚动，避免旧页滚动位置残留导致新页面视觉上空白 */
+watch(
+  () => route.path,
+  () => {
+    // el-main 是组件实例，真实滚动容器是 $el
+    mainEl.value?.$el?.scrollTo?.({ top: 0 })
+  }
+)
 
 interface SubMenuItem {
   path: string

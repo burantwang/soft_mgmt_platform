@@ -34,7 +34,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'portal',
         name: 'Portal',
         component: () => import('@/pages/portal/index.vue'),
-        meta: { title: '系统门户', icon: 'Compass', perm: 'portal:view' }
+        meta: { title: '系统门户', icon: 'Compass' }
       },
       {
         path: 'dashboard',

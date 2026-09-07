@@ -1,5 +1,5 @@
 # Start backend (dev profile) in background
-$java = 'C:\Users\wangwenzhi\.devtools\jdk17\bin\java.exe'
+$java = Join-Path $env:USERPROFILE '.devtools\jdk17\bin\java.exe'
 $root = Split-Path $PSScriptRoot -Parent
 $jar = Join-Path $root 'backend\target\dev-platform.jar'
 $stdout = Join-Path $PSScriptRoot 'backend-run.log'

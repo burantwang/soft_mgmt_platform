@@ -21,6 +21,19 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
+// 抑制 Element Plus collapse-transition 在 Vue 3.5 下的已知刷屏警告
+// 见：https://github.com/element-plus/element-plus/issues
+const IGNORED_WARNINGS = [
+  'Slot "default" invoked outside of the render function',
+  'Slot "title" invoked outside of the render function'
+]
+app.config.warnHandler = (msg, instance, trace) => {
+  if (IGNORED_WARNINGS.some((hint) => msg.includes(hint))) {
+    return
+  }
+  console.warn(msg, instance, trace)
+}
+
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
