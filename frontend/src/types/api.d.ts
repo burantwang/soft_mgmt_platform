@@ -46,6 +46,10 @@ export interface UserInfo {
   roleNames?: string[]
   /** 角色编码列表：super_admin/admin/employee */
   roleCodes?: string[]
+  /** 所属组ID列表 */
+  groupIds?: number[]
+  /** 所属组名称列表 */
+  groupNames?: string[]
   createTime?: string
 }
 
@@ -60,6 +64,8 @@ export interface UserForm {
   remark?: string
   status?: number
   roleIds?: number[]
+  /** 所属组ID列表 */
+  groupIds?: number[]
 }
 
 /** 角色列表项 */
@@ -91,4 +97,38 @@ export interface PermissionItem {
   permName: string
   module: string
   moduleName: string
+}
+
+/** 用户组(组织归属)列表项 */
+export interface GroupItem {
+  id: number
+  groupName: string
+  remark?: string
+  /** 状态:1启用 0停用 */
+  status?: number
+  /** 组内成员数 */
+  memberCount?: number
+  /** 组详情含已选成员ID(编辑回填) */
+  memberIds?: number[]
+  createTime?: string
+}
+
+/** 组新增/编辑入参 */
+export interface GroupForm {
+  id?: number
+  groupName?: string
+  remark?: string
+  status?: number
+}
+
+/** 组内成员项(用户基础信息) */
+export interface MemberItem {
+  id: number
+  username: string
+  nickname: string
+  email?: string
+  phone?: string
+  /** 状态:1正常 0禁用 */
+  status?: number
+  createTime?: string
 }

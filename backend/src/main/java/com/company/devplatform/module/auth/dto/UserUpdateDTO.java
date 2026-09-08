@@ -23,4 +23,7 @@ public class UserUpdateDTO {
 
     /** 角色ID列表,为空数组表示清空角色 */
     private List<Long> roleIds;
+
+    /** 所属组ID列表,为空数组表示清空所属组 */
+    private List<Long> groupIds;
 }

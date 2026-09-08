@@ -8,11 +8,15 @@ import com.company.devplatform.common.ErrorCode;
 import com.company.devplatform.common.exception.BusinessException;
 import com.company.devplatform.module.auth.dto.UserCreateDTO;
 import com.company.devplatform.module.auth.dto.UserUpdateDTO;
+import com.company.devplatform.module.auth.entity.SysGroup;
+import com.company.devplatform.module.auth.entity.SysGroupUser;
 import com.company.devplatform.module.auth.entity.SysPermission;
 import com.company.devplatform.module.auth.entity.SysRole;
 import com.company.devplatform.module.auth.entity.SysRolePermission;
 import com.company.devplatform.module.auth.entity.SysUser;
 import com.company.devplatform.module.auth.entity.SysUserRole;
+import com.company.devplatform.module.auth.mapper.SysGroupMapper;
+import com.company.devplatform.module.auth.mapper.SysGroupUserMapper;
 import com.company.devplatform.module.auth.mapper.SysPermissionMapper;
 import com.company.devplatform.module.auth.mapper.SysRoleMapper;
 import com.company.devplatform.module.auth.mapper.SysRolePermissionMapper;
@@ -49,11 +53,24 @@ public class UserServiceImpl implements UserService {
     private final SysPermissionMapper permissionMapper;
     private final SysUserRoleMapper userRoleMapper;
     private final SysRolePermissionMapper rolePermissionMapper;
+    private final SysGroupMapper groupMapper;
+    private final SysGroupUserMapper groupUserMapper;
     private final BCryptPasswordEncoder passwordEncoder;
 
     @Override
-    public Page<UserVO> page(String keyword, Integer status, int page, int size) {
+    public Page<UserVO> page(String keyword, Integer status, Long groupId, int page, int size) {
         LambdaQueryWrapper<SysUser> qw = Wrappers.lambdaQuery();
+        if (groupId != null) {
+            List<Long> memberIds = groupUserMapper.selectList(Wrappers.<SysGroupUser>lambdaQuery()
+                            .eq(SysGroupUser::getGroupId, groupId))
+                    .stream().map(SysGroupUser::getUserId).toList();
+            if (memberIds.isEmpty()) {
+                Page<UserVO> empty = new Page<>(page, size, 0);
+                empty.setRecords(List.of());
+                return empty;
+            }
+            qw.in(SysUser::getId, memberIds);
+        }
         if (StringUtils.hasText(keyword)) {
             String kw = keyword.trim();
             qw.and(w -> w.like(SysUser::getUsername, kw).or().like(SysUser::getNickname, kw));
@@ -98,6 +115,7 @@ public class UserServiceImpl implements UserService {
         userMapper.insert(user);
 
         bindRoles(user.getId(), dto.getRoleIds());
+        bindGroups(user.getId(), dto.getGroupIds());
     }
 
     @Override
@@ -119,6 +137,9 @@ public class UserServiceImpl implements UserService {
         if (dto.getRoleIds() != null) {
             bindRoles(user.getId(), dto.getRoleIds());
         }
+        if (dto.getGroupIds() != null) {
+            bindGroups(user.getId(), dto.getGroupIds());
+        }
     }
 
     @Override
@@ -133,6 +154,7 @@ public class UserServiceImpl implements UserService {
         }
         userMapper.deleteById(id);
         userRoleMapper.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId, id));
+        groupUserMapper.delete(Wrappers.<SysGroupUser>lambdaQuery().eq(SysGroupUser::getUserId, id));
     }
 
     @Override
@@ -229,6 +251,24 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /** 替换用户所属组绑定 */
+    private void bindGroups(Long userId, List<Long> groupIds) {
+        groupUserMapper.delete(Wrappers.<SysGroupUser>lambdaQuery().eq(SysGroupUser::getUserId, userId));
+        if (groupIds == null || groupIds.isEmpty()) {
+            return;
+        }
+        List<Long> distinctIds = groupIds.stream().distinct().toList();
+        if (groupMapper.selectBatchIds(distinctIds).size() != distinctIds.size()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "存在无效的组");
+        }
+        for (Long groupId : distinctIds) {
+            SysGroupUser relation = new SysGroupUser();
+            relation.setUserId(userId);
+            relation.setGroupId(groupId);
+            groupUserMapper.insert(relation);
+        }
+    }
+
     private UserVO toUserVO(SysUser user) {
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);
@@ -244,6 +284,18 @@ public class UserServiceImpl implements UserService {
             vo.setRoleNames(List.of());
         }
         vo.setRoleCodes(getRoleCodes(user.getId()));
+
+        List<SysGroupUser> groupRelations = groupUserMapper.selectList(Wrappers.<SysGroupUser>lambdaQuery()
+                .eq(SysGroupUser::getUserId, user.getId()));
+        if (!groupRelations.isEmpty()) {
+            List<Long> groupIds = groupRelations.stream().map(SysGroupUser::getGroupId).toList();
+            List<SysGroup> groups = groupMapper.selectBatchIds(groupIds);
+            vo.setGroupIds(groupIds);
+            vo.setGroupNames(groups.stream().map(SysGroup::getGroupName).filter(Objects::nonNull).toList());
+        } else {
+            vo.setGroupIds(List.of());
+            vo.setGroupNames(List.of());
+        }
         return vo;
     }
 }

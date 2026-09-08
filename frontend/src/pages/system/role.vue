@@ -1,9 +1,11 @@
 <template>
   <div>
-    <el-card shadow="never">
-      <div class="table-toolbar">
-        <el-button type="primary" @click="openCreate">新增角色</el-button>
-      </div>
+    <el-tabs v-model="activeTab" class="role-tabs">
+      <el-tab-pane label="角色权限" name="role">
+        <el-card shadow="never">
+          <div class="table-toolbar">
+            <el-button type="primary" @click="openCreate">新增角色</el-button>
+          </div>
 
       <el-table v-loading="loading" :data="list" border stripe>
         <el-table-column prop="roleCode" label="角色编码" min-width="140" />
@@ -37,7 +39,13 @@
           @change="loadData"
         />
       </div>
-    </el-card>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="用户组管理" name="group" lazy>
+        <RoleGroup />
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogMode === 'create' ? '新增角色' : '编辑角色'" width="480px" destroy-on-close>
@@ -85,6 +93,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { assignPermissionsApi, createRoleApi, deleteRoleApi, getPermissionListApi, getRolePermissionIdsApi, getRoleListApi, updateRoleApi } from '@/api/system'
 import type { PermissionItem, RoleItem } from '@/types/api'
+import RoleGroup from './role-group.vue'
 
 interface TreeNode {
   id: number | string
@@ -92,6 +101,8 @@ interface TreeNode {
   disabled?: boolean
   children?: TreeNode[]
 }
+
+const activeTab = ref('role')
 
 const loading = ref(false)
 const submitting = ref(false)

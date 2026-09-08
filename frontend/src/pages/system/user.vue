@@ -12,6 +12,11 @@
             <el-option label="禁用" :value="0" />
           </el-select>
         </el-form-item>
+        <el-form-item label="所属组">
+          <el-select v-model="query.groupId" placeholder="全部" clearable style="width: 200px">
+            <el-option v-for="g in groupOptions" :key="g.id" :label="g.groupName" :value="g.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="onSearch">查询</el-button>
           <el-button @click="onReset">重置</el-button>
@@ -32,6 +37,12 @@
           <template #default="{ row }">
             <el-tag v-for="r in row.roleNames" :key="r" size="small" class="mr-4">{{ r }}</el-tag>
             <span v-if="!row.roleNames?.length" class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属组" min-width="160">
+          <template #default="{ row }">
+            <el-tag v-for="g in row.groupNames" :key="g" size="small" class="mr-4">{{ g }}</el-tag>
+            <span v-if="!row.groupNames?.length" class="text-muted">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="phone" label="手机号" width="130" />
@@ -85,6 +96,11 @@
             <el-option v-for="r in roles" :key="r.id" :label="r.roleName" :value="r.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="所属组">
+          <el-select v-model="form.groupIds" multiple placeholder="选择所属组(可多选)" style="width: 100%">
+            <el-option v-for="g in groupOptions" :key="g.id" :label="g.groupName" :value="g.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="手机号">
           <el-input v-model="form.phone" placeholder="手机号" />
         </el-form-item>
@@ -109,15 +125,16 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
-import { createUserApi, deleteUserApi, getAllRolesApi, getUserListApi, resetPasswordApi, updateUserApi, updateUserStatusApi } from '@/api/system'
-import type { RoleItem, UserInfo } from '@/types/api'
+import { createUserApi, deleteUserApi, getAllGroupsApi, getAllRolesApi, getUserListApi, resetPasswordApi, updateUserApi, updateUserStatusApi } from '@/api/system'
+import type { GroupItem, RoleItem, UserInfo } from '@/types/api'
 
 const loading = ref(false)
 const submitting = ref(false)
 const list = ref<UserInfo[]>([])
 const total = ref(0)
-const query = reactive({ keyword: '', status: undefined as number | undefined, page: 1, size: 10 })
+const query = reactive({ keyword: '', status: undefined as number | undefined, groupId: undefined as number | undefined, page: 1, size: 10 })
 const roles = ref<RoleItem[]>([])
+const groupOptions = ref<GroupItem[]>([])
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -131,7 +148,8 @@ const form = reactive({
   phone: '',
   remark: '',
   status: 1,
-  roleIds: [] as number[]
+  roleIds: [] as number[],
+  groupIds: [] as number[]
 })
 const rules = {
   username: [{ required: true, message: '请输入登录账号', trigger: 'blur' }],
@@ -140,6 +158,10 @@ const rules = {
 
 async function loadRoles() {
   roles.value = (await getAllRolesApi()).data
+}
+
+async function loadGroups() {
+  groupOptions.value = (await getAllGroupsApi()).data
 }
 
 async function loadData() {
@@ -161,6 +183,7 @@ function onSearch() {
 function onReset() {
   query.keyword = ''
   query.status = undefined
+  query.groupId = undefined
   onSearch()
 }
 
@@ -168,7 +191,7 @@ function openCreate() {
   dialogMode.value = 'create'
   Object.assign(form, {
     id: undefined, username: '', password: '', nickname: '', email: '',
-    phone: '', remark: '', status: 1, roleIds: []
+    phone: '', remark: '', status: 1, roleIds: [], groupIds: []
   })
   dialogVisible.value = true
 }
@@ -184,7 +207,8 @@ function openEdit(row: UserInfo) {
     phone: row.phone || '',
     remark: row.remark || '',
     status: row.status ?? 1,
-    roleIds: [...(row.roleIds || [])]
+    roleIds: [...(row.roleIds || [])],
+    groupIds: [...(row.groupIds || [])]
   })
   dialogVisible.value = true
 }
@@ -239,6 +263,7 @@ async function onToggleStatus(row: UserInfo) {
 onMounted(() => {
   loadData()
   loadRoles()
+  loadGroups()
 })
 </script>
 

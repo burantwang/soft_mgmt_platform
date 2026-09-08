@@ -36,9 +36,10 @@ public class UserController {
     @GetMapping
     public Result<Page<UserVO>> page(@RequestParam(required = false) String keyword,
                                      @RequestParam(required = false) Integer status,
+                                     @RequestParam(required = false) Long groupId,
                                      @RequestParam(defaultValue = "1") int page,
                                      @RequestParam(defaultValue = "10") int size) {
-        return Result.ok(userService.page(keyword, status, page, Math.min(Math.max(size, 1), 100)));
+        return Result.ok(userService.page(keyword, status, groupId, page, Math.min(Math.max(size, 1), 100)));
     }
 
     /** 用户详情 */

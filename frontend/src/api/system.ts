@@ -1,5 +1,5 @@
 import { http } from '@/utils/request'
-import type { ApiResult, PageResult, PageQuery, PermissionItem, RoleForm, RoleItem, UserForm, UserInfo } from '@/types/api'
+import type { ApiResult, GroupForm, GroupItem, MemberItem, PageResult, PageQuery, PermissionItem, RoleForm, RoleItem, UserForm, UserInfo } from '@/types/api'
 
 /* ==================== 用户管理 ==================== */
 
@@ -80,4 +80,51 @@ export function getRolePermissionIdsApi(id: number): Promise<ApiResult<number[]>
 /** 权限点列表 */
 export function getPermissionListApi(): Promise<ApiResult<PermissionItem[]>> {
   return http.get<PermissionItem[]>('/system/permissions')
+}
+
+/* ==================== 组管理(组织归属) ==================== */
+
+/** 分页查询组 */
+export function getGroupListApi(params: PageQuery): Promise<ApiResult<PageResult<GroupItem>>> {
+  return http.get<PageResult<GroupItem>>('/system/groups', params)
+}
+
+/** 全部启用组(下拉,含人数) */
+export function getAllGroupsApi(): Promise<ApiResult<GroupItem[]>> {
+  return http.get<GroupItem[]>('/system/groups/all')
+}
+
+/** 组详情(含成员ID,编辑回填) */
+export function getGroupDetailApi(id: number): Promise<ApiResult<GroupItem>> {
+  return http.get<GroupItem>(`/system/groups/${id}`)
+}
+
+/** 新增组 */
+export function createGroupApi(data: GroupForm): Promise<ApiResult<null>> {
+  return http.post<null>('/system/groups', data)
+}
+
+/** 编辑组 */
+export function updateGroupApi(data: GroupForm): Promise<ApiResult<null>> {
+  return http.put<null>('/system/groups', data)
+}
+
+/** 删除组(解散,解除全部成员关联) */
+export function deleteGroupApi(id: number): Promise<ApiResult<null>> {
+  return http.del<null>(`/system/groups/${id}`)
+}
+
+/** 分页查询组内成员 */
+export function getGroupMemberPageApi(id: number, params: PageQuery): Promise<ApiResult<PageResult<MemberItem>>> {
+  return http.get<PageResult<MemberItem>>(`/system/groups/${id}/members`, params)
+}
+
+/** 查询组内已选成员ID */
+export function getGroupMemberIdsApi(id: number): Promise<ApiResult<number[]>> {
+  return http.get<number[]>(`/system/groups/${id}/member-ids`)
+}
+
+/** 整体替换组成员 */
+export function saveGroupMembersApi(id: number, userIds: number[]): Promise<ApiResult<null>> {
+  return http.put<null>(`/system/groups/${id}/members`, { userIds })
 }

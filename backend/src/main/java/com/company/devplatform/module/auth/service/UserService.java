@@ -12,7 +12,7 @@ import java.util.List;
  */
 public interface UserService {
 
-    Page<UserVO> page(String keyword, Integer status, int page, int size);
+    Page<UserVO> page(String keyword, Integer status, Long groupId, int page, int size);
 
     UserVO getById(Long id);
 

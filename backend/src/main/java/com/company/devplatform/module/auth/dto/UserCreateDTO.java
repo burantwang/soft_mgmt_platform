@@ -25,4 +25,7 @@ public class UserCreateDTO {
 
     /** 角色ID列表 */
     private List<Long> roleIds;
+
+    /** 所属组ID列表 */
+    private List<Long> groupIds;
 }
