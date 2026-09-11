@@ -32,9 +32,17 @@ $dump = (Get-Command mysqldump -ErrorAction Stop).Source
 Write-Host "==> Dumping: ${User}@${HostName}:${Port}/${DbName}"
 Write-Host "==> Output : $OutFile"
 
-& $dump -h $HostName -P $Port -u $User ("-p" + $Password) `
-    --single-transaction --no-tablespaces --routines --triggers `
-    --default-character-set=utf8mb4 $DbName 1> $OutFile
+# 重要：必须使用 mysqldump 的 --result-file 直接写文件。
+# 若改用 PowerShell 的 ">" 重定向，Windows PowerShell 5.1 会把输出编码为 UTF-16LE，
+# 该文件在 Linux/容器内导入时会报 "ASCII '\0' appeared in the statement"。
+$dumpArgs = @(
+    '-h', $HostName, '-P', $Port, '-u', $User, ('-p' + $Password),
+    '--single-transaction', '--no-tablespaces', '--routines', '--triggers',
+    '--default-character-set=utf8mb4', '--set-charset',
+    "--result-file=$OutFile", $DbName
+)
+& $dump @dumpArgs 2>&1 | Out-String -Stream |
+    Where-Object { $_ -and ($_ -notmatch 'password on the command line') } | Write-Host
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "mysqldump failed (exit=$LASTEXITCODE). Check MySQL is running and credentials."

@@ -2,6 +2,7 @@
 node_modules/
 backend/target/
 frontend/dist/
+*.tsbuildinfo
 *.log
 
 # ============ 运行时数据（随环境迁移，不走版本库） ============
@@ -22,3 +23,15 @@ tools/_jar_extract/
 # ============ 环境配置（含密码，不入库） ============
 .env
 .env.local
+
+# ============ 离线部署包：密钥、产物、镜像与数据快照（不入库） ============
+tools/deploy/*.key
+tools/deploy/id_*
+tools/deploy/devplatform_vm*
+tools/deploy/offline/config/.env
+tools/deploy/offline/build/*/*.jar
+tools/deploy/offline/build/frontend/dist/
+tools/deploy/offline/images/
+tools/deploy/offline/deps/
+tools/deploy/offline/sql/init/011-data-snapshot.sql
+*.tar.gz

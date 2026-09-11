@@ -1,0 +1,64 @@
+# ============================================================
+# Sonic 版本发布业务平台 —— 离线部署编排
+# 特点：
+#   1. 全部使用本地已加载镜像（不 build、不联网）
+#   2. 数据与配置落在 /opt/devplatform 与 /data 挂载目录，便于整体迁移
+#   3. 数据库首次启动自动执行 sql/init 下按编号排序的脚本（含全量数据快照）
+# 使用：cp ../config/.env.template ../config/.env && vim ../config/.env && docker compose --env-file ../config/.env up -d
+# ============================================================
+name: devplatform
+
+services:
+  mysql:
+    image: devplatform/mysql:8.0
+    container_name: dev-platform-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 config/.env 中设置}
+      MYSQL_DATABASE: dev_platform
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --max_connections=300
+    volumes:
+      - /opt/devplatform/sql/init:/docker-entrypoint-initdb.d:ro
+      - /opt/devplatform/data/mysql:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  backend:
+    image: devplatform/backend:1.0.0
+    container_name: dev-platform-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: prod
+      DB_URL: jdbc:mysql://mysql:3306/dev_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 config/.env 中设置}
+      FILE_STORAGE_ROOT: /data/files
+      API_PUSH_TOKEN: ${API_PUSH_TOKEN:?请在 config/.env 中设置}
+      ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:?请在 config/.env 中设置}
+    volumes:
+      - /opt/devplatform/data/files:/data/files
+      - /opt/devplatform/data/logs:/app/logs
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    image: devplatform/frontend:1.0.0
+    container_name: dev-platform-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
